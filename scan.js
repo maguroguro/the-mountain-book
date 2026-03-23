@@ -12,6 +12,8 @@
   const MAX_PROFILE_PTS = 250;
   const THUMB_W = 480;
   const THUMB_H = 360;
+  const PIN_W = 80;
+  const PIN_H = 80;
 
   function haversine(lat1, lon1, lat2, lon2) {
     const R = 6371;
@@ -452,7 +454,35 @@
       ],
       coords: simplified.map((p) => [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5]),
       elevation_profile: profile,
+      _timedPts: (() => {
+        const tp = raw
+          .filter((p) => p[3] instanceof Date && !isNaN(p[3]))
+          .map((p) => ({ lat: p[0], lon: p[1], t: p[3].getTime() }));
+        return tp.length >= 2 ? tp : null;
+      })(),
     };
+  }
+
+  /**
+   * Interpolates a (lat, lon) position on a timed track given a photo's ISO datetime.
+   * Returns null if the timestamp falls outside the track's time range or no timed points exist.
+   */
+  function interpolateOnTrack(timedPts, isoDatetime) {
+    if (!timedPts || timedPts.length < 2) return null;
+    const ts = new Date(isoDatetime).getTime();
+    if (isNaN(ts)) return null;
+    if (ts < timedPts[0].t || ts > timedPts[timedPts.length - 1].t) return null;
+    for (let i = 1; i < timedPts.length; i++) {
+      const a = timedPts[i - 1], b = timedPts[i];
+      if (ts >= a.t && ts <= b.t) {
+        const frac = b.t === a.t ? 0 : (ts - a.t) / (b.t - a.t);
+        return {
+          lat: a.lat + frac * (b.lat - a.lat),
+          lon: a.lon + frac * (b.lon - a.lon),
+        };
+      }
+    }
+    return null;
   }
 
   async function collectRecursive(dirHandle, basePath, gpx, images) {
@@ -547,6 +577,19 @@
     ctx.drawImage(bmp, 0, 0, w, h);
     bmp.close();
     return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+  }
+
+  async function makePinBlob(file) {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(PIN_W / bmp.width, PIN_H / bmp.height, 1);
+    const w = Math.round(bmp.width * scale);
+    const h = Math.round(bmp.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    bmp.close();
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.70));
   }
 
   async function scanBaseFolder(baseHandle, onProgress, opts) {
@@ -742,18 +785,39 @@
         const thumbUrl = URL.createObjectURL(thumbBlob);
         blobUrls.push(thumbUrl);
 
+        let pinUrl = thumbUrl;
+        try {
+          const pinBlob = await makePinBlob(file);
+          pinUrl = URL.createObjectURL(pinBlob);
+          blobUrls.push(pinUrl);
+        } catch (e) { /* fall back to thumbUrl */ }
+
         const stem = im.name.replace(/\.[^.]+$/i, '');
         photos.push({
           id: stem + '_' + id,
           folder: tf.label,
           src: srcBlob,
           thumb: thumbUrl,
+          pin: pinUrl,
           lat,
           lon,
           datetime,
           date,
           track_id: id,
         });
+      }
+
+      // Override photo GPS with position interpolated from track timestamps.
+      // Camera GPS may be inaccurate on first shots (cold start); the track is more reliable.
+      if (track._timedPts) {
+        for (const photo of photos.filter((p) => p.track_id === id && p.datetime)) {
+          const pos = interpolateOnTrack(track._timedPts, photo.datetime);
+          if (pos) {
+            photo.lat = Math.round(pos.lat * 1e6) / 1e6;
+            photo.lon = Math.round(pos.lon * 1e6) / 1e6;
+          }
+        }
+        delete track._timedPts;
       }
 
       if (track.time_hm == null && imgList.length) {

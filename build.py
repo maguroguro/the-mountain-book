@@ -173,6 +173,7 @@ def parse_gpx(path: Path) -> dict | None:
         "center":           [round(sum(lats)/len(lats), 5), round(sum(lons)/len(lons), 5)],
         "coords":           [[round(p[0], 5), round(p[1], 5)] for p in simplified],
         "elevation_profile": profile,
+        "_raw_pts":         raw_pts,
     }
 
 def parse_kml(path: Path) -> dict | None:
@@ -325,6 +326,21 @@ def extract_exif(path: Path) -> dict | None:
         "date":     dt.strftime("%Y-%m-%d") if dt else None,
     }
 
+def interpolate_on_track(raw_pts, dt):
+    """Return (lat, lon) interpolated from timed GPX points at datetime dt, or (None, None)."""
+    timed = [(p[0], p[1], p[3]) for p in raw_pts if p[3] is not None]
+    if len(timed) < 2 or dt is None:
+        return None, None
+    if dt < timed[0][2] or dt > timed[-1][2]:
+        return None, None
+    for i in range(1, len(timed)):
+        a, b = timed[i - 1], timed[i]
+        if a[2] <= dt <= b[2]:
+            span = (b[2] - a[2]).total_seconds()
+            frac = 0.0 if span == 0 else (dt - a[2]).total_seconds() / span
+            return round(a[0] + frac * (b[0] - a[0]), 6), round(a[1] + frac * (b[1] - a[1]), 6)
+    return None, None
+
 def closest_track(lat, lon, tracks, max_km=8.0):
     best_id = None; best_d = float("inf")
     for t in tracks:
@@ -335,8 +351,10 @@ def closest_track(lat, lon, tracks, max_km=8.0):
 
 def process_photos(tracks):
     by_date = {}
+    raw_pts_by_id = {}
     for t in tracks:
         if t["date"]: by_date.setdefault(t["date"], []).append(t)
+        if "_raw_pts" in t: raw_pts_by_id[t["id"]] = t["_raw_pts"]
 
     photos = []
     folders = sorted([d for d in FOTO_DIR.iterdir() if d.is_dir() and d.name != "thumbs"])
@@ -372,6 +390,18 @@ def process_photos(tracks):
             if not track_id and lat:
                 track_id = closest_track(lat, lon, tracks, 8)
 
+            # Override GPS with position interpolated from track timestamps.
+            # Camera GPS may be inaccurate on first shots (cold start); the track is more reliable.
+            dt_str = meta.get("datetime")
+            if track_id and dt_str:
+                try:
+                    dt_obj = datetime.fromisoformat(dt_str)
+                    ilat, ilon = interpolate_on_track(raw_pts_by_id.get(track_id, []), dt_obj)
+                    if ilat is not None:
+                        lat, lon = ilat, ilon
+                except Exception:
+                    pass
+
             folder_photos.append({
                 "id":       img_path.stem,
                 "folder":   folder.name,
@@ -379,7 +409,7 @@ def process_photos(tracks):
                 "thumb":    "foto/thumbs/" + "/".join(rel_img.parts),
                 "lat":      lat,
                 "lon":      lon,
-                "datetime": meta.get("datetime"),
+                "datetime": dt_str,
                 "date":     date,
                 "track_id": track_id,
             })
@@ -429,6 +459,9 @@ def main():
         print(f"  ✅  {len(photos)} foto processate")
     else:
         print(f"  ⚠️  Cartella foto non trovata ({FOTO_DIR}), salto")
+
+    for t in tracks:
+        t.pop("_raw_pts", None)
 
     # ── statistiche globali
     stats = {
