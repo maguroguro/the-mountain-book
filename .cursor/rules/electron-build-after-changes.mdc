@@ -1,0 +1,18 @@
+---
+description: After editing The Mountain Book (Electron) app, build only the .app bundle (no DMG/ZIP).
+alwaysApply: true
+---
+
+# Build the .app after changes
+
+This project ships as **`The Mountain Book.app`** only. **Do not** add or rely on **DMG** or **ZIP** targets (`mac.target` must stay **`["dir"]`** unless the user asks otherwise).
+
+Whenever you modify anything that affects the runnable app—**`index.html`**, **`main.js`**, **`scan.js`**, **`persist.js`**, **`package.json`**, **`assets/`**, **`scripts/`** (icon/build), or Electron config—**run before finishing**:
+
+```bash
+cd "/Users/maguro/_DATA/APPS/The Mountain Book" && npm run dist:mac
+```
+
+That regenerates **`assets/app-icon-emoji.png`**, runs **electron-builder** (unpacked **`.app`** under `mac-*`), then **`scripts/move-app-to-root.cjs`** moves **`The Mountain Book.app`** to the repo root.
+
+Do **not** end a task that changed app code without running this build or reporting the failure.

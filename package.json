@@ -1,0 +1,43 @@
+{
+  "name": "mountain-book",
+  "version": "1.0.5",
+  "description": "The Mountain Book — mappa, GPX, KML, foto",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "icon:emoji": "node scripts/generate-emoji-icon.cjs",
+    "pack": "node scripts/generate-emoji-icon.cjs && electron-builder --mac && node scripts/move-app-to-root.cjs",
+    "dist:mac": "node scripts/generate-emoji-icon.cjs && electron-builder --mac && node scripts/move-app-to-root.cjs"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "canvas": "^3.2.1",
+    "electron": "^28.3.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "app.themountainbook.desktop",
+    "productName": "The Mountain Book",
+    "icon": "assets/app-icon-emoji.png",
+    "files": [
+      "main.js",
+      "index.html",
+      "scan.js",
+      "persist.js",
+      "data/**/*",
+      "assets/**/*",
+      "build.py"
+    ],
+    "mac": {
+      "target": ["dir"],
+      "category": "public.app-category.productivity"
+    },
+    "directories": {
+      "output": "."
+    },
+    "asarUnpack": [
+      "assets/**/*"
+    ]
+  }
+}

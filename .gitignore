@@ -1,0 +1,21 @@
+node_modules/
+.venv/
+dist-electron/
+
+# Build Electron nella root del progetto
+mac-arm64/
+mac-x64/
+The Mountain Book.app/
+*.dmg
+*-mac.zip
+*.blockmap
+builder-debug.yml
+builder-effective-config.yaml
+
+# Opzionale: sorgenti PNG non usati dall’app (icona = emoji rasterizzata in assets/app-icon-emoji.png)
+build/icon-source.png
+build/icon-1024.png
+
+# Sistema
+__pycache__/
+.DS_Store

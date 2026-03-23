@@ -1,0 +1,2256 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Mountain Book</title>
+<link rel="icon" type="image/png" href="assets/app-icon-emoji.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+
+<style>
+:root {
+  /* ~70% browns: surfaces & chrome */
+  --bg:      #1a140f;
+  --bg2:     #221a15;
+  --bg3:     #2a211d;
+  --bg4:     #352a24;
+  --border:  #453830;
+  /* High-contrast text on brown */
+  --text:    #f5efe6;
+  --text2:   #c9b8a6;
+  --text3:   #9a8a78;
+  /* ~30% sage / greens: accents, selection, key figures */
+  --accent:  #7d9b7a;
+  --accent2: #a3c4a0;
+  --accent-deep: #5a7a58;
+  --brown-warm: #b8956a;
+  --sidebar-w: 340px;
+  --nav-h:   58px;
+  --detail-w: 360px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 17px; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Cormorant Garamond', Georgia, serif; }
+
+/* ─── NAV ─────────────────────────────────────────────────────── */
+#nav {
+  position: fixed; top: 0; left: 0; right: 0; height: var(--nav-h);
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 0; z-index: 1000;
+  padding: 0 1rem;
+}
+.nav-brand {
+  font-size: 1.12rem; font-weight: 300; letter-spacing: 0.12em;
+  color: var(--accent2); text-transform: uppercase; white-space: nowrap;
+  padding-right: 1.5rem; border-right: 1px solid var(--border);
+  font-style: italic;
+}
+.nav-tabs { display: flex; margin-left: 1rem; gap: 0; }
+.nav-tabs button {
+  background: none; border: none; color: var(--text2); font-family: inherit;
+  font-size: 0.92rem; letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 0 1.25rem; height: var(--nav-h); cursor: pointer;
+  border-bottom: 2px solid transparent; transition: all 0.2s;
+}
+.nav-tabs button:hover { color: var(--text); }
+.nav-tabs button.active { color: var(--accent2); border-bottom-color: var(--accent); }
+.nav-actions {
+  margin-left: auto; display: flex; align-items: center; gap: 0.75rem;
+}
+.nav-load {
+  background: var(--bg3); border: 1px solid var(--border); color: var(--accent2);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 0.45rem 0.8rem; border-radius: 4px; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.nav-load:hover { border-color: var(--accent); color: var(--accent); }
+.nav-load.danger {
+  color: var(--text3); border-color: var(--border);
+}
+.nav-load.danger:hover { border-color: #8b4a4a; color: #c08080; }
+.nav-global-stats {
+  display: flex; gap: 1.5rem; align-items: center;
+}
+.nav-stat { display: flex; flex-direction: column; align-items: flex-end; }
+.nav-stat-val { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: var(--accent2); }
+.nav-stat-lbl { font-size: 0.68rem; color: var(--text2); letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* ─── VIEWS ───────────────────────────────────────────────────── */
+.view {
+  position: fixed;
+  top: var(--nav-h);
+  left: 0;
+  right: 0;
+  height: calc(100vh - var(--nav-h));
+  min-height: 0;
+  overflow: hidden;
+}
+.view.hidden { display: none; }
+
+/* ─── MAP VIEW ────────────────────────────────────────────────── */
+#view-map {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#sidebar {
+  flex: 0 0 var(--sidebar-w);
+  width: var(--sidebar-w);
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+/* Porta scroll: il flex figlio con overflow:auto taglia l’ultima riga in Chromium/Electron; il fill assoluto no. */
+.sidebar-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+.sidebar-head {
+  padding: 0.75rem; border-bottom: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 0.5rem;
+}
+#search {
+  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  font-family: inherit; font-size: 0.95rem; padding: 0.5rem 0.75rem;
+  border-radius: 3px; width: 100%; outline: none;
+}
+#search:focus { border-color: var(--accent); }
+#search::placeholder { color: var(--text3); }
+.sidebar-list-mode {
+  display: flex; gap: 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+}
+.sidebar-mode-btn {
+  flex: 1; background: var(--bg3); border: none; color: var(--text3);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 0.48rem 0.4rem; cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.sidebar-mode-btn:hover { color: var(--text2); background: var(--bg4); }
+.sidebar-mode-btn.active { background: var(--bg); color: var(--accent2); }
+.sidebar-filters { display: flex; gap: 0.5rem; align-items: center; }
+#year-filter {
+  flex: 1; background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
+  font-family: inherit; font-size: 0.86rem; padding: 0.42rem 0.55rem;
+  border-radius: 3px; outline: none; cursor: pointer;
+}
+.toggle-photos {
+  display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem;
+  color: var(--text2); cursor: pointer; white-space: nowrap; user-select: none;
+}
+.toggle-photos input { accent-color: var(--accent); cursor: pointer; }
+.sidebar-count {
+  font-size: 0.74rem; color: var(--text2); letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--border);
+}
+#track-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding-bottom: max(1.5rem, calc(1rem + env(safe-area-inset-bottom, 0px)));
+  scroll-padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+#track-list::after {
+  content: '';
+  display: block;
+  height: 1rem;
+}
+#track-list::-webkit-scrollbar { width: 6px; }
+#track-list::-webkit-scrollbar-track { background: transparent; }
+#track-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.track-item {
+  display: flex; align-items: stretch; cursor: pointer;
+  border-bottom: 1px solid var(--border); transition: background 0.15s;
+}
+.track-item:hover { background: var(--bg3); }
+.track-item.active { background: var(--bg4); }
+.track-bar { width: 3px; flex-shrink: 0; }
+.track-body { padding: 0.6rem 0.75rem; flex: 1; min-width: 0; }
+.track-name {
+  font-size: 1.02rem; color: var(--text); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; font-weight: 400;
+}
+.track-date { font-size: 0.8rem; color: var(--text2); margin-top: 0.1rem; font-style: italic; }
+.track-pills { display: flex; gap: 0.4rem; margin-top: 0.35rem; flex-wrap: wrap; }
+.pill {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+  color: var(--text2); background: var(--bg3); padding: 0.12rem 0.4rem;
+  border-radius: 2px;
+}
+.empty-state { padding: 2rem; text-align: center; color: var(--text3); font-style: italic; font-size: 0.9rem; }
+
+/* ─── SIDEBAR — vista cartelle (Finder-like) ──────────────────── */
+.folder-block { border-bottom: 1px solid var(--border); }
+.folder-row {
+  display: flex; align-items: center; gap: 0.35rem; width: 100%;
+  background: transparent; border: none; color: var(--text);
+  font-family: inherit; font-size: 0.88rem; cursor: pointer;
+  padding: 0.45rem 0.65rem 0.45rem 0.5rem; text-align: left; transition: background 0.12s;
+}
+.folder-row:hover { background: var(--bg3); }
+.folder-chevron {
+  flex-shrink: 0; width: 0.65rem; font-size: 0.55rem; color: var(--text3);
+  transition: transform 0.15s ease; line-height: 1;
+}
+.folder-row.expanded .folder-chevron { transform: rotate(90deg); }
+.folder-icon-wrap {
+  flex-shrink: 0; width: 18px; height: 14px; color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+}
+.folder-icon-wrap svg { width: 18px; height: 14px; display: block; }
+.folder-name {
+  flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 400; color: var(--text);
+}
+.folder-children { background: rgba(0,0,0,0.12); }
+.folder-children .track-item { border-bottom-color: var(--border); }
+.folder-children .folder-block:last-child { border-bottom: none; }
+
+/* ─── MAP AREA ────────────────────────────────────────────────── */
+#map-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+#map {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg);
+}
+
+/* Statistiche + profilo sotto la mappa */
+.map-bottom-bar {
+  flex-shrink: 0;
+  z-index: 1190;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  max-height: min(280px, 38vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-shadow: 0 -6px 24px rgba(0,0,0,0.35);
+}
+.map-bottom-bar.hidden { display: none !important; }
+.map-bottom-bar .detail-stats { flex-shrink: 0; }
+.map-bottom-bar .detail-elevation-wrap {
+  border-bottom: none;
+  padding: 0.4rem 0.75rem 0.55rem;
+  flex-shrink: 0;
+  overflow: visible;
+  position: relative;
+  z-index: 5;
+}
+.map-bottom-bar .elevation-chart-host {
+  height: 112px;
+  min-height: 112px;
+  overflow: visible;
+}
+.map-bottom-bar #elevation-chart {
+  height: 112px !important;
+  max-height: 24vh;
+}
+/* HTML tooltip for elevation (avoids canvas clip at bar edge) */
+.elev-tooltip {
+  position: fixed;
+  z-index: 10050;
+  pointer-events: none;
+  background: var(--bg4);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.35;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  white-space: nowrap;
+  max-width: min(92vw, 360px);
+}
+.leaflet-tile-pane { filter: brightness(0.85) saturate(0.9); }
+
+/* photo pins (img inside: reliable with blob: URLs in Electron) */
+.photo-pin {
+  width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--accent);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  transition: transform 0.15s;
+  background: var(--bg3);
+}
+.photo-pin img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.photo-pin:hover { transform: scale(1.15); }
+.photo-cluster {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--accent); color: #1a140f;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 400;
+  border: 2px solid var(--accent2); box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+/* ─── PROFILO (nel pannello dettaglio) ─────────────────────────── */
+.detail-elevation-wrap {
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0.75rem 0.65rem;
+  flex-shrink: 0;
+}
+.detail-elevation-wrap .detail-section-title { margin-bottom: 0.35rem; }
+.elevation-chart-host {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  min-height: 120px;
+}
+#elevation-chart {
+  display: block;
+  width: 100% !important;
+  height: 120px !important;
+  max-height: 28vh;
+}
+
+/* ─── DETAIL PANEL ────────────────────────────────────────────── */
+/* Sopra i tile Leaflet (pane ~400) e i controlli (~1000), sennò il pannello resta invisibile. */
+#detail-panel {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: var(--detail-w); background: var(--bg2);
+  border-left: 1px solid var(--border); z-index: 1200;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  max-height: 100%;
+  transform: translateX(0); transition: transform 0.25s ease;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.35);
+  pointer-events: auto;
+}
+#detail-panel.hidden { transform: translateX(calc(var(--detail-w) + 10px)); }
+.detail-panel-scroll {
+  flex: 1 1 0;
+  height: 0;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+.detail-placeholder {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  padding: 1.25rem 1rem;
+  padding-bottom: max(1.5rem, calc(1rem + env(safe-area-inset-bottom, 0px)));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+.detail-placeholder-title {
+  font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent2);
+  margin-bottom: 0.75rem;
+}
+.detail-placeholder-text {
+  font-size: 1.02rem; color: var(--text2); line-height: 1.55; font-style: italic;
+}
+.detail-top {
+  padding: 1rem; border-bottom: 1px solid var(--border); position: relative;
+  flex-shrink: 0;
+}
+.detail-close {
+  position: absolute; top: 0.75rem; right: 0.75rem;
+  background: none; border: none; color: var(--text3); cursor: pointer;
+  font-size: 1rem; padding: 0.2rem 0.4rem; border-radius: 2px; transition: color 0.15s;
+}
+.detail-close:hover { color: var(--text); }
+.detail-date { font-size: 0.8rem; color: var(--text2); font-style: italic; margin-bottom: 0.25rem; }
+.detail-name { font-size: 1.35rem; font-weight: 300; color: var(--text); line-height: 1.3; padding-right: 1.5rem; }
+.detail-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border);
+}
+.stat-cell { background: var(--bg2); padding: 0.45rem 0.5rem; }
+.stat-val { font-family: 'JetBrains Mono', monospace; font-size: 1.22rem; color: var(--accent2); }
+.stat-lbl { font-size: 0.72rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.07em; margin-top: 0.1rem; }
+.detail-body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.75rem;
+  padding-bottom: max(1.5rem, calc(0.75rem + env(safe-area-inset-bottom, 0px)));
+  scroll-padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  box-sizing: border-box;
+}
+.detail-body::after {
+  content: '';
+  display: block;
+  height: 2rem;
+}
+.detail-body::-webkit-scrollbar { width: 6px; }
+.detail-body::-webkit-scrollbar-thumb { background: var(--border); }
+.detail-placeholder::-webkit-scrollbar { width: 6px; }
+.detail-placeholder::-webkit-scrollbar-thumb { background: var(--border); }
+.detail-section-title {
+  font-size: 0.74rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text2); margin-bottom: 0.5rem;
+}
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.photo-thumb {
+  aspect-ratio: 1; overflow: hidden; cursor: pointer; background: var(--bg3);
+  position: relative;
+}
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; display: block; }
+.photo-thumb:hover img { transform: scale(1.08); }
+.no-photos { color: var(--text3); font-style: italic; font-size: 0.82rem; padding: 0.5rem 0; }
+
+/* ─── STATS VIEW ──────────────────────────────────────────────── */
+#view-stats { overflow-y: auto; background: var(--bg); padding: 2rem; }
+#view-stats::-webkit-scrollbar { width: 5px; }
+#view-stats::-webkit-scrollbar-thumb { background: var(--border); }
+.stats-page { max-width: 1100px; margin: 0 auto; }
+.stats-page h1 {
+  font-size: 2.5rem; font-weight: 300; color: var(--accent2); font-style: italic;
+  margin-bottom: 0.25rem;
+}
+.stats-page .subtitle { color: var(--text3); font-style: italic; margin-bottom: 2.5rem; }
+.hero-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1px; background: var(--border); margin-bottom: 1px; }
+.hero-cell { background: var(--bg2); padding: 1.5rem 1.25rem; }
+.hero-val {
+  font-family: 'JetBrains Mono', monospace; font-size: 2rem;
+  color: var(--accent2); display: block; line-height: 1;
+}
+.hero-lbl { font-size: 0.76rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.4rem; }
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); margin-top: 1px; }
+.chart-cell { background: var(--bg2); padding: 1.25rem; }
+.chart-cell h3 { font-size: 0.82rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text2); margin-bottom: 1rem; font-weight: 400; }
+.chart-cell canvas { max-height: 220px; }
+.top-list { display: flex; flex-direction: column; gap: 0; }
+.top-row {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.55rem 0; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s;
+}
+.top-row:last-child { border-bottom: none; }
+.top-row:hover { background: var(--bg3); margin: 0 -0.5rem; padding: 0.55rem 0.5rem; border-radius: 2px; }
+.top-rank { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--accent2); width: 20px; }
+.top-name { flex: 1; font-size: 0.95rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-val { font-family: 'JetBrains Mono', monospace; font-size: 0.84rem; color: var(--text2); white-space: nowrap; }
+
+/* ─── TIMELINE VIEW ───────────────────────────────────────────── */
+#view-timeline { overflow-y: auto; background: var(--bg); padding: 2rem; }
+#view-timeline::-webkit-scrollbar { width: 5px; }
+#view-timeline::-webkit-scrollbar-thumb { background: var(--border); }
+.timeline-page { max-width: 1000px; margin: 0 auto; }
+.timeline-page h1 {
+  font-size: 2.5rem; font-weight: 300; color: var(--accent2); font-style: italic;
+  margin-bottom: 0.25rem;
+}
+.timeline-page .subtitle { color: var(--text3); font-style: italic; margin-bottom: 2.5rem; }
+.year-block { margin-bottom: 3rem; }
+.year-label {
+  font-family: 'JetBrains Mono', monospace; font-size: 2.2rem; color: var(--accent2);
+  border-left: 4px solid var(--accent); padding-left: 1rem; margin-bottom: 0.4rem;
+}
+.year-summary { color: var(--text3); font-size: 0.82rem; font-style: italic; padding-left: calc(1rem + 4px); margin-bottom: 1rem; }
+.year-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1px; background: var(--border); }
+.trek-card { background: var(--bg2); cursor: pointer; transition: background 0.15s; overflow: hidden; }
+.trek-card:hover { background: var(--bg3); }
+.trek-card-photo { height: 120px; background: var(--bg3) center/cover no-repeat; position: relative; }
+.trek-card-photo.no-img {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text3); font-size: 2rem;
+}
+.trek-card-body { padding: 0.7rem 0.8rem; }
+.trek-card-date { font-size: 0.68rem; color: var(--text3); font-style: italic; margin-bottom: 0.2rem; }
+.trek-card-name { font-size: 0.95rem; color: var(--text); line-height: 1.3; margin-bottom: 0.4rem; }
+.trek-card-pills { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+
+/* ─── LIGHTBOX ────────────────────────────────────────────────── */
+#lightbox {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 9000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 1rem;
+}
+#lightbox.hidden { display: none; }
+#lb-img { max-width: 100%; max-height: 85vh; object-fit: contain; display: block; border: 1px solid var(--border); }
+#lb-caption { color: var(--text3); font-size: 0.78rem; margin-top: 0.75rem; font-style: italic; }
+#lb-close {
+  position: absolute; top: 1.25rem; right: 1.5rem;
+  background: none; border: none; color: var(--text2); font-size: 1.5rem;
+  cursor: pointer; transition: color 0.15s;
+}
+#lb-close:hover { color: var(--text); }
+#lb-prev, #lb-next {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  background: rgba(0,0,0,0.4); border: 1px solid var(--border);
+  color: var(--text2); font-size: 1.8rem; cursor: pointer; padding: 0.5rem 0.8rem;
+  transition: all 0.15s; border-radius: 2px;
+}
+#lb-prev { left: 1.5rem; } #lb-next { right: 1.5rem; }
+#lb-prev:hover, #lb-next:hover { background: rgba(125,155,122,0.22); color: var(--accent2); }
+
+/* ─── LOADING / ERROR ─────────────────────────────────────────── */
+#loading {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 8000; gap: 0.75rem;
+}
+#loading .loading-logo {
+  max-height: 120px;
+  width: auto;
+  height: auto;
+  animation: pulse 2s infinite;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+.nav-brand-icon {
+  height: 1.35em;
+  width: auto;
+  vertical-align: -0.2em;
+  margin-right: 0.35rem;
+  user-select: none;
+}
+#loading-title { color: var(--text3); font-style: italic; font-size: 1rem; }
+#loading-detail {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text2);
+  max-width: min(520px, 92vw); text-align: center; line-height: 1.45;
+  white-space: pre-wrap; word-break: break-word; min-height: 2.8em;
+}
+.loading-bar-wrap {
+  width: min(320px, 88vw); height: 4px; background: var(--border);
+  border-radius: 2px; overflow: hidden; margin-top: 0.35rem;
+}
+.loading-bar {
+  height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 2px; transition: width 0.15s ease-out;
+}
+@keyframes pulse { 0%,100%{ opacity:0.5; transform:translateY(0) } 50%{ opacity:1; transform:translateY(-6px) } }
+#error { position: fixed; inset: 0; background: var(--bg); display: none; align-items: center; justify-content: center; }
+#error .inner { text-align: center; max-width: 480px; padding: 2rem; }
+#error h2 { font-size: 1.5rem; font-weight: 300; color: var(--accent2); margin-bottom: 1rem; font-style: italic; }
+#error p { color: var(--text3); line-height: 1.7; }
+#error code { background: var(--bg3); padding: 0.4rem 0.8rem; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--accent2); }
+
+/* ─── WELCOME (nessun dato / scelta cartella) ───────────────── */
+#welcome {
+  position: fixed; inset: 0; background: var(--bg);
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 7500; padding: 2rem; text-align: center;
+}
+#welcome.visible { display: flex; }
+#welcome h2 { font-size: 1.85rem; font-weight: 300; color: var(--accent2); font-style: italic; margin-bottom: 0.75rem; }
+#welcome p { color: var(--text2); max-width: 420px; line-height: 1.65; margin-bottom: 1.25rem; font-size: 1.02rem; }
+#welcome .btn-primary {
+  background: var(--accent); color: #f5efe6; border: none; font-family: inherit;
+  font-size: 0.98rem; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 0.78rem 1.6rem; border-radius: 4px; cursor: pointer; margin: 0.35rem;
+}
+#welcome .btn-primary:hover { filter: brightness(1.08); }
+#welcome .btn-secondary {
+  background: transparent; color: var(--text2); border: 1px solid var(--border);
+  font-family: inherit; font-size: 0.92rem; padding: 0.62rem 1.15rem; border-radius: 4px; cursor: pointer; margin: 0.35rem;
+}
+#welcome .btn-secondary:hover { border-color: var(--accent); color: var(--accent2); }
+#scan-status { margin-top: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text3); min-height: 1.2em; }
+
+/* ─── SCROLLBAR globale ───────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <img class="loading-logo" src="assets/app-icon-emoji.png" alt="" width="120" height="120">
+  <p id="loading-title">Caricamento…</p>
+  <p id="loading-detail"></p>
+  <div class="loading-bar-wrap" aria-hidden="true"><div id="loading-bar" class="loading-bar"></div></div>
+</div>
+
+<!-- ERROR -->
+<div id="error">
+  <div class="inner">
+    <h2>Dati non trovati</h2>
+    <p>Scegli una cartella con le uscite (una sottocartella per escursione) oppure genera i dati con lo script:</p>
+    <br>
+    <code>python3 build.py</code>
+    <br><br>
+    <p style="color:var(--text3)">Poi ricarica la pagina, oppure usa «Carica cartella».</p>
+  </div>
+</div>
+
+<!-- WELCOME: scelta cartella -->
+<div id="welcome">
+  <h2>The Mountain Book</h2>
+  <p>Struttura: <strong>cartella base</strong> → (anno o raccolta, es. «Escursioni 2019 con Nadia») → <strong>cartella per ogni uscita</strong> (es. «73)Pizzo Formico 25-11-2019») → dentro <strong>.gpx</strong> / <strong>.kml</strong> e <strong>.jpg</strong>. Se non c’è il livello anno, ogni sottocartella della base è un’uscita.</p>
+  <p style="font-size:0.85rem;margin-top:0.75rem">Dopo una scansione, i dati sono <strong>salvati in questa app</strong> (sul Mac, nello spazio del browser/Electron) e si ripristinano al prossimo avvio.</p>
+  <div>
+    <button type="button" class="btn-primary" id="btn-pick-folder">Carica cartella…</button>
+    <button type="button" class="btn-secondary" id="btn-retry-built" style="display:none">Usa data/trek-data.js</button>
+  </div>
+  <p id="scan-status"></p>
+</div>
+
+<!-- NAV -->
+<nav id="nav" style="display:none">
+  <div class="nav-brand"><img class="nav-brand-icon" src="assets/app-icon-emoji.png" alt=""> The Mountain Book</div>
+  <div class="nav-tabs">
+    <button data-view="map" class="active">Mappa</button>
+    <button data-view="stats">Statistiche</button>
+    <button data-view="timeline">Cronologia</button>
+  </div>
+  <div class="nav-actions">
+    <button type="button" class="nav-load" id="nav-pick-folder" title="Scansiona una cartella sul disco">Cartella</button>
+    <button type="button" class="nav-load" id="nav-refresh-folder" title="Rileggi la cartella salvata (GPX, KML, foto)">Aggiorna</button>
+    <button type="button" class="nav-load danger" id="nav-clear-local" title="Elimina i dati salvati in questa app (IndexedDB)">Dimentica salvataggio</button>
+    <div class="nav-global-stats">
+    <div class="nav-stat">
+      <span class="nav-stat-val" id="ns-km">—</span>
+      <span class="nav-stat-lbl">km totali</span>
+    </div>
+    <div class="nav-stat">
+      <span class="nav-stat-val" id="ns-ele">—</span>
+      <span class="nav-stat-lbl">dislivello ↑</span>
+    </div>
+    <div class="nav-stat">
+      <span class="nav-stat-val" id="ns-n">—</span>
+      <span class="nav-stat-lbl">uscite</span>
+    </div>
+    <div class="nav-stat">
+      <span class="nav-stat-val" id="ns-ph">—</span>
+      <span class="nav-stat-lbl">foto</span>
+    </div>
+    </div>
+  </div>
+</nav>
+
+<!-- MAP VIEW -->
+<div id="view-map" class="view hidden">
+  <div id="sidebar">
+    <div class="sidebar-head">
+      <div class="sidebar-list-mode" role="group" aria-label="Vista elenco">
+        <button type="button" id="sidebar-mode-flat" class="sidebar-mode-btn active" title="Tutte le uscite in un unico elenco">Tutte</button>
+        <button type="button" id="sidebar-mode-folders" class="sidebar-mode-btn" title="Struttura cartelle (senza radice)">Cartelle</button>
+      </div>
+      <input id="search" placeholder="Cerca uscita…">
+      <div class="sidebar-filters">
+        <select id="year-filter"><option value="">Tutti gli anni</option></select>
+        <label class="toggle-photos">
+          <input type="checkbox" id="show-photos" checked> Foto
+        </label>
+      </div>
+    </div>
+    <div class="sidebar-count" id="sidebar-count"></div>
+    <div class="sidebar-scroll">
+      <div id="track-list"></div>
+    </div>
+  </div>
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="map-bottom-bar" class="map-bottom-bar hidden" aria-label="Statistiche e profilo altimetrico"></div>
+  </div>
+  <div id="detail-panel" class="hidden">
+    <!-- filled dynamically -->
+  </div>
+</div>
+
+<!-- STATS VIEW -->
+<div id="view-stats" class="view hidden">
+  <div class="stats-page" id="stats-content"></div>
+</div>
+
+<!-- TIMELINE VIEW -->
+<div id="view-timeline" class="view hidden">
+  <div class="timeline-page" id="timeline-content"></div>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" class="hidden">
+  <button id="lb-close">✕</button>
+  <img id="lb-img" src="" alt="">
+  <div id="lb-caption"></div>
+  <button id="lb-prev">‹</button>
+  <button id="lb-next">›</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+<script src="scan.js"></script>
+<script src="persist.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  CONFIG & PALETTE
+// ═══════════════════════════════════════════════════════════════════
+
+const PALETTE = [
+  '#8b7355', '#6b9080', '#a67c52', '#7d9b7a',
+  '#5c4033', '#a3c4a0', '#c4a574', '#4a6b5c',
+  '#9a8e7a', '#5a7a58',
+];
+const YEAR_COLOR = {};
+
+// ═══════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════
+
+const S = {
+  tracks:  [],
+  photos:  [],
+  gstats:  {},
+  trekFingerprints: {},
+  sel:     null,   // selected track
+  view:    'map',
+  filter:  { year: '', q: '' },
+  showPh:  true,
+  lb:      { photos: [], idx: 0 },
+  blobUrls: [],
+  /** flat | folders — elenco unico vs albero cartelle */
+  sidebarListMode: 'flat',
+  /** chiavi JSON.stringify segmenti per cartelle espanse */
+  folderTreeExpanded: new Set(),
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  MAP
+// ═══════════════════════════════════════════════════════════════════
+
+let map, trackCanvasRenderer, trackLayers = {}, photoGroup, elevChart;
+/** Cerchio sulla mappa sincronizzato col punto del profilo altimetrico (hover). */
+let elevMapHoverMarker = null;
+let elevRenderGen = 0;
+
+/** Tracce GPX: magenta-rossastro (profilo altimetrico resta verde salvia). */
+const TRACK_LINE_COLOR = '#c2185b';
+const TRACK_LINE_SEL = '#ec407a';
+/** Passaggio mouse (lista o mappa). */
+const TRACK_LINE_HOVER = '#f48fb1';
+
+/** Profilo altimetrico: salvia (fisso). */
+const ELEV_LINE = '#7d9b7a';
+const ELEV_FILL = 'rgba(125, 155, 122, 0.28)';
+
+function ensurePhotoMarkersPane() {
+  if (!map) return;
+  if (!map.getPane('photoMarkersTop')) map.createPane('photoMarkersTop');
+  const el = map.getPane('photoMarkersTop');
+  /* Sopra overlay/tile e canvas traccia (overlay ~400), sotto popup tooltip */
+  if (el) el.style.zIndex = 700;
+}
+
+function ensureElevProfileHoverPane() {
+  if (!map || map.getPane('elevProfileHoverPane')) return;
+  map.createPane('elevProfileHoverPane');
+  const el = map.getPane('elevProfileHoverPane');
+  if (el) el.style.zIndex = 710;
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const toR = (x) => (x * Math.PI) / 180;
+  const dlat = toR(lat2 - lat1);
+  const dlon = toR(lon2 - lon1);
+  const a =
+    Math.sin(dlat / 2) ** 2 +
+    Math.cos(toR(lat1)) * Math.cos(toR(lat2)) * Math.sin(dlon / 2) ** 2;
+  return R * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/** Posizione sulla polilinea semplificata a distanza d (km) — fallback se il profilo non ha lat/lon. */
+function latLonAtDistanceAlongCoords(coords, dKm) {
+  if (!coords || coords.length < 1) return null;
+  if (coords.length === 1) return coords[0];
+  const cum = [0];
+  for (let i = 1; i < coords.length; i++) {
+    cum.push(cum[i - 1] + haversineKm(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]));
+  }
+  const total = cum[cum.length - 1];
+  if (total <= 0) return coords[0];
+  const d = Math.max(0, Math.min(dKm, total));
+  for (let i = 1; i < cum.length; i++) {
+    if (d <= cum[i]) {
+      const seg0 = cum[i - 1];
+      const seg1 = cum[i];
+      const t = seg1 > seg0 ? (d - seg0) / (seg1 - seg0) : 0;
+      const a = coords[i - 1];
+      const b = coords[i];
+      return [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+    }
+  }
+  return coords[coords.length - 1];
+}
+
+/** Allinea indice profilo → posizione mappa (dati nuovi con lat/lon; vecchi: distanza sulla coords). */
+function latLonForProfilePoint(track, prof, idx) {
+  if (!track || !prof || idx < 0 || idx >= prof.length) return null;
+  const p = prof[idx];
+  if (p.lat != null && p.lon != null && Number.isFinite(+p.lat) && Number.isFinite(+p.lon)) {
+    return [+p.lat, +p.lon];
+  }
+  if (track.coords && track.coords.length) {
+    return latLonAtDistanceAlongCoords(track.coords, p.d != null ? +p.d : 0);
+  }
+  return null;
+}
+
+function clearElevProfileMapMarker() {
+  if (elevMapHoverMarker && map) {
+    try { map.removeLayer(elevMapHoverMarker); } catch (e) {}
+  }
+  elevMapHoverMarker = null;
+}
+
+function syncElevProfileIndexToMap(track, prof, idx) {
+  if (!map || !track || !prof || idx < 0 || idx >= prof.length) return;
+  const ll = latLonForProfilePoint(track, prof, idx);
+  if (!ll) return;
+  ensureElevProfileHoverPane();
+  if (!elevMapHoverMarker) {
+    elevMapHoverMarker = L.circleMarker(ll, {
+      radius: 9,
+      color: '#f5efe6',
+      weight: 2,
+      fillColor: ELEV_LINE,
+      fillOpacity: 0.95,
+      pane: 'elevProfileHoverPane',
+      interactive: false,
+    });
+    elevMapHoverMarker.addTo(map);
+  } else {
+    elevMapHoverMarker.setLatLng(ll);
+  }
+  try { elevMapHoverMarker.bringToFront(); } catch (e) {}
+}
+
+function initMap() {
+  map = L.map('map', { center: [46.5, 11], zoom: 7, zoomControl: false });
+  ensurePhotoMarkersPane();
+  trackCanvasRenderer = L.canvas({ padding: 0.5 });
+  L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a>',
+    maxZoom: 17,
+  }).addTo(map);
+  L.control.zoom({ position: 'topright' }).addTo(map);
+
+  const all = S.tracks.flatMap(t => t.coords || []);
+  if (all.length) {
+    try { map.fitBounds(L.latLngBounds(all), { padding: [30, 30] }); }
+    catch(e) {}
+  }
+}
+
+function plotTracks() {
+  S.tracks.forEach(t => {
+    if (!t.coords || t.coords.length < 2) return;
+    const layer = L.polyline(t.coords, {
+      color: TRACK_LINE_COLOR,
+      weight: 3,
+      opacity: 0.92,
+      lineCap: 'round',
+      lineJoin: 'round',
+      renderer: trackCanvasRenderer,
+    });
+
+    layer.on('click', () => selectTrack(t.id));
+    layer.on('mouseover', function() {
+      this.setStyle({ weight: 6, opacity: 1, color: TRACK_LINE_HOVER });
+      this.bringToFront();
+      ensurePhotosOnTop();
+      this.bindTooltip(
+        `<strong style="font-family:serif">${escapeHtml(trackDisplayName(t))}</strong><br>
+         <span style="font-family:monospace;font-size:0.8em">${t.distance_km} km &nbsp;+${t.ele_gain_m}m &nbsp;▲${t.ele_max_m}m</span>`,
+        { direction: 'top', sticky: true, className: 'trek-tip' }
+      ).openTooltip();
+    });
+    layer.on('mouseout', function() {
+      if (S.sel?.id === t.id) {
+        this.setStyle({ weight: 6, opacity: 1, color: TRACK_LINE_SEL });
+      } else {
+        this.setStyle({ weight: 3, opacity: 0.88, color: TRACK_LINE_COLOR });
+      }
+    });
+
+    layer.addTo(map);
+    trackLayers[t.id] = { layer, color: TRACK_LINE_COLOR };
+  });
+}
+
+function makePhotoClusterGroup() {
+  return L.markerClusterGroup({
+    showCoverageOnHover: false,
+    maxClusterRadius: 50,
+    iconCreateFunction: c => L.divIcon({
+      html: `<div class="photo-cluster">${c.getChildCount()}</div>`,
+      className: '', iconSize: [38, 38],
+    }),
+  });
+}
+
+function photoDivIconFromThumb(thumb) {
+  const safe = String(thumb || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  return L.divIcon({
+    html: `<div class="photo-pin"><img src="${safe}" alt="" decoding="async" loading="lazy"/></div>`,
+    className: '',
+    iconSize: [44, 44],
+    iconAnchor: [22, 44],
+  });
+}
+
+function addPhotosToCluster(group, photos) {
+  photos.forEach(p => {
+    const icon = photoDivIconFromThumb(p.thumb);
+    const m = L.marker([p.lat, p.lon], { icon });
+    m.on('click', () => openLbFromPhoto(p));
+    group.addLayer(m);
+  });
+}
+
+function ensurePhotosOnTop() {
+  if (photoGroup && map && map.hasLayer(photoGroup) && typeof photoGroup.bringToFront === 'function') {
+    photoGroup.bringToFront();
+  }
+}
+
+function removePhotoGroupFromMap() {
+  if (photoGroup && map) {
+    try { map.removeLayer(photoGroup); } catch (e) {}
+  }
+  photoGroup = null;
+}
+
+function plotPhotos() {
+  removePhotoGroupFromMap();
+  photoGroup = makePhotoClusterGroup();
+  addPhotosToCluster(photoGroup, S.photos.filter(p => p.lat && p.lon));
+  photoGroup.addTo(map);
+  ensurePhotosOnTop();
+  const showPh = document.getElementById('show-photos')?.checked !== false;
+  if (!showPh) map.removeLayer(photoGroup);
+}
+
+/** Solo foto dell’uscita. LayerGroup (no cluster) + pane sopra la traccia Canvas. */
+function plotPhotosForTrack(trackId) {
+  removePhotoGroupFromMap();
+  ensurePhotoMarkersPane();
+  const t = S.tracks.find(x => x.id === trackId);
+  if (!t) return;
+  const pool = photosForTrack(t).filter((p) =>
+    p.lat != null && p.lon != null && Number.isFinite(+p.lat) && Number.isFinite(+p.lon)
+  );
+  photoGroup = L.layerGroup();
+  pool.forEach((p) => {
+    const icon = photoDivIconFromThumb(p.thumb);
+    const m = L.marker([+p.lat, +p.lon], {
+      icon,
+      pane: 'photoMarkersTop',
+      zIndexOffset: 500,
+    });
+    m.on('click', () => openLbFromPhoto(p));
+    photoGroup.addLayer(m);
+  });
+  photoGroup.addTo(map);
+  ensurePhotosOnTop();
+  const showPh = document.getElementById('show-photos')?.checked !== false;
+  if (!showPh) map.removeLayer(photoGroup);
+}
+
+/** Con dettaglio aperto: solo traccia selezionata + sue foto. */
+function applyMapSelectionFocus(trackId) {
+  Object.entries(trackLayers).forEach(([tid, { layer }]) => {
+    if (tid === trackId) {
+      if (!map.hasLayer(layer)) layer.addTo(map);
+      layer.setStyle({ weight: 6, opacity: 1, color: TRACK_LINE_SEL });
+    } else if (map.hasLayer(layer)) {
+      map.removeLayer(layer);
+    }
+  });
+  plotPhotosForTrack(trackId);
+}
+
+/** Chiudi dettaglio: tutte le tracce e tutte le foto (rispetta «Foto»). */
+function restoreMapFullLayers() {
+  Object.entries(trackLayers).forEach(([, { layer }]) => {
+    if (!map.hasLayer(layer)) layer.addTo(map);
+    layer.setStyle({ weight: 3, opacity: 0.88, color: TRACK_LINE_COLOR });
+  });
+  plotPhotos();
+  ensurePhotosOnTop();
+}
+
+/** Ripristina stile traccia dopo hover (lista o mappa). */
+function applyMapTrackRestStyle(trackId) {
+  const entry = trackLayers[trackId];
+  if (!entry || !map || !map.hasLayer(entry.layer)) return;
+  if (S.sel?.id === trackId) {
+    entry.layer.setStyle({ weight: 6, opacity: 1, color: TRACK_LINE_SEL });
+  } else {
+    entry.layer.setStyle({ weight: 3, opacity: 0.88, color: TRACK_LINE_COLOR });
+  }
+}
+
+function onSidebarTrackHover(trackId) {
+  const entry = trackLayers[trackId];
+  if (!entry || !map || !map.hasLayer(entry.layer)) return;
+  entry.layer.setStyle({ weight: 6, opacity: 1, color: TRACK_LINE_HOVER });
+  ensurePhotosOnTop();
+}
+
+function onSidebarTrackHoverEnd(trackId) {
+  applyMapTrackRestStyle(trackId);
+}
+
+/** Inquadra traccia (e foto con GPS) nel riquadro mappa *visibile*: padding basso barra profilo + destro pannello foto. */
+function fitBoundsToTrack(t) {
+  if (!map || !t) return;
+  const entry = trackLayers[t.id];
+  const bar = document.getElementById('map-bottom-bar');
+  const bottomExtra = bar && !bar.classList.contains('hidden') ? (bar.offsetHeight || 0) + 28 : 64;
+  const side = 56;
+  const detailEl = document.getElementById('detail-panel');
+  const detailPad =
+    detailEl && !detailEl.classList.contains('hidden') ? Math.round(detailEl.offsetWidth || 360) : 0;
+  /* Leaflet: paddingBottomRight [x,y] = inset da angolo in basso a destra (x = da destra, y = da basso) */
+  const padRight = side + detailPad;
+  if (entry) {
+    try {
+      const b = entry.layer.getBounds();
+      photosForTrack(t).forEach((p) => {
+        if (p.lat != null && p.lon != null && Number.isFinite(+p.lat) && Number.isFinite(+p.lon)) {
+          try { b.extend([+p.lat, +p.lon]); } catch (e) {}
+        }
+      });
+      map.fitBounds(b, {
+        paddingTopLeft: [side, side],
+        paddingBottomRight: [padRight, bottomExtra],
+        maxZoom: 15,
+        animate: false,
+      });
+    } catch (e) {}
+  } else if (t.center && t.center.length === 2) {
+    try { map.setView(t.center, 14); } catch (e) {}
+  }
+}
+
+function selectTrack(id) {
+  const t = S.tracks.find(x => x.id === id);
+  if (!t) return;
+  S.sel = t;
+
+  applyMapSelectionFocus(id);
+
+  document.querySelectorAll('.track-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.id === id)
+  );
+  const el = document.querySelector(`.track-item[data-id="${id}"]`);
+  if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+  renderDetailPanel(t);
+  renderBottomBar(t);
+  renderElevation(t);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try { map.invalidateSize(); } catch (e) {}
+      fitBoundsToTrack(t);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  SIDEBAR TRACK LIST
+// ═══════════════════════════════════════════════════════════════════
+
+function renderTrackList(opts) {
+  opts = opts || {};
+  const { year, q } = S.filter;
+  let list = S.tracks.filter(t =>
+    (!year || t.year == year) &&
+    (!q    || trackDisplayName(t).toLowerCase().includes(q.toLowerCase()) || (t.date||'').includes(q))
+  );
+  list = [...list].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  document.getElementById('sidebar-count').textContent =
+    `${list.length} uscita${list.length !== 1 ? 'e' : ''}`;
+
+  const container = document.getElementById('track-list');
+  if (!list.length) {
+    container.innerHTML =
+      '<div class="empty-state">Nessuna uscita trovata</div>' + TRACK_LIST_SCROLL_SPACER;
+    return;
+  }
+
+  if (S.sidebarListMode === 'folders') {
+    const tree = buildFolderTree(list);
+    const { node: displayRoot, pathPrefix: rootPrefix } = unwrapSingletonFolders(tree, []);
+    if (!opts.preserveFolderExpansion) {
+      const keys = [];
+      collectAllFolderPathKeys(displayRoot, rootPrefix, keys);
+      S.folderTreeExpanded = new Set(keys);
+    }
+    container.innerHTML = renderFolderTreeHTML(displayRoot, rootPrefix) + TRACK_LIST_SCROLL_SPACER;
+    return;
+  }
+
+  container.innerHTML = list.map(t => renderTrackItemHTML(t)).join('') + TRACK_LIST_SCROLL_SPACER;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DETAIL PANEL
+// ═══════════════════════════════════════════════════════════════════
+
+function renderDetailPlaceholder() {
+  const bar = document.getElementById('map-bottom-bar');
+  if (bar) {
+    bar.classList.add('hidden');
+    bar.innerHTML = '';
+  }
+  const panel = document.getElementById('detail-panel');
+  panel.innerHTML = `
+    <div class="detail-placeholder">
+      <p class="detail-placeholder-title">Dettaglio uscita</p>
+      <p class="detail-placeholder-text">Clicca un’uscita nell’elenco a sinistra o sulla traccia in mappa: statistiche e profilo sotto la mappa, foto qui a destra.</p>
+    </div>`;
+  panel.classList.remove('hidden');
+}
+
+function renderBottomBar(t) {
+  const bar = document.getElementById('map-bottom-bar');
+  if (!bar) return;
+  bar.innerHTML = `
+    <div class="detail-stats">
+      <div class="stat-cell"><div class="stat-val">${t.distance_km}</div><div class="stat-lbl">km distanza</div></div>
+      <div class="stat-cell"><div class="stat-val">+${t.ele_gain_m}</div><div class="stat-lbl">m dislivello ↑</div></div>
+      <div class="stat-cell"><div class="stat-val">${t.ele_max_m}</div><div class="stat-lbl">m quota max</div></div>
+      <div class="stat-cell"><div class="stat-val">${t.ele_min_m}</div><div class="stat-lbl">m quota min</div></div>
+    </div>
+    <div class="detail-elevation-wrap" id="detail-elevation-wrap">
+      <div class="detail-section-title">Profilo altimetrico</div>
+      <div class="elevation-chart-host">
+        <canvas id="elevation-chart" width="400" height="100"></canvas>
+      </div>
+      <p id="elevation-unavailable" class="no-photos" style="display:none">Profilo non disponibile: GPX senza quote, oppure uscita solo foto.</p>
+    </div>`;
+  bar.classList.remove('hidden');
+}
+
+function renderDetailPanel(t) {
+  const photos = photosForTrack(t);
+  const col    = YEAR_COLOR[t.year] || '#7d9b7a';
+  const panel  = document.getElementById('detail-panel');
+
+  panel.innerHTML = `
+    <div class="detail-top" style="border-top:3px solid ${col}">
+      <button class="detail-close" onclick="closeDetail()">✕</button>
+      <div class="detail-date">${fmtDate(t.date)}${t.time_hm ? ' · ' + escapeHtml(t.time_hm) : ''}</div>
+      <div class="detail-name">${escapeHtml(trackDisplayName(t))}</div>
+    </div>
+    <div class="detail-panel-scroll">
+      <div class="detail-body">
+        ${photos.length ? `
+          <div class="detail-section-title" style="margin-bottom:0.6rem">${photos.length} foto</div>
+          <div class="photo-grid">
+            ${photos.map((p,i) => `
+              <div class="photo-thumb" onclick="openLb(${i},'${t.id}')">
+                <img src="${p.thumb}" loading="lazy" alt="">
+              </div>`).join('')}
+          </div>` :
+          `<div class="no-photos">Nessuna foto associata</div>`}
+      </div>
+    </div>`;
+
+  panel.classList.remove('hidden');
+}
+
+/**
+ * Hover su tutta l’area del grafico: sceglie il punto più vicino lungo l’asse X (non solo sulla linea).
+ * Eseguito in rAF dopo gli handler interni di Chart.js così non viene sovrascritto.
+ */
+const elevXAxisHoverPlugin = {
+  id: 'elevXAxisHover',
+  afterEvent(chart, args) {
+    const e = args.event;
+    if (!e) return;
+    const native = e.native || e;
+    const type = native.type;
+    if (type === 'mouseout' || type === 'mouseleave' || type === 'pointerleave') {
+      chart.$elevHoverIdx = null;
+      chart.setActiveElements([]);
+      chart.update('none');
+      clearElevProfileMapMarker();
+      return;
+    }
+    if (type !== 'mousemove' && type !== 'pointermove') return;
+    const { top, bottom, left, right } = chart.chartArea;
+    const x = e.x;
+    const y = e.y;
+    if (x < left || x > right || y < top || y > bottom) {
+      chart.$elevHoverIdx = null;
+      chart.setActiveElements([]);
+      chart.update('none');
+      clearElevProfileMapMarker();
+      return;
+    }
+    const ds = chart.data.datasets[0].data;
+    if (!ds || !ds.length) return;
+    const xScale = chart.scales.x;
+    const xVal = xScale.getValueForPixel(x);
+    let bestIdx = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < ds.length; i++) {
+      const pt = ds[i];
+      const xv = typeof pt === 'object' && pt !== null && 'x' in pt ? +pt.x : +pt;
+      const d = Math.abs(xv - xVal);
+      if (d < bestD) {
+        bestD = d;
+        bestIdx = i;
+      }
+    }
+    if (chart.$elevHoverIdx === bestIdx) return;
+    chart.$elevHoverIdx = bestIdx;
+    const trk = chart.$elevTrack;
+    const prof = chart.$elevProfile;
+    requestAnimationFrame(() => {
+      try {
+        if (!chart || !chart.ctx) return;
+        chart.setActiveElements([{ datasetIndex: 0, index: bestIdx }]);
+        chart.update('none');
+        if (trk && prof) syncElevProfileIndexToMap(trk, prof, bestIdx);
+      } catch (_) {}
+    });
+  },
+};
+
+const elevCrosshairPlugin = {
+  id: 'elevCrosshair',
+  afterDraw(chart) {
+    const tt = chart.tooltip;
+    if (!tt || tt.opacity === 0) return;
+    const x = tt.caretX;
+    const { top, bottom } = chart.chartArea;
+    if (x == null || top == null) return;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.strokeStyle = 'rgba(163, 196, 160, 0.92)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.restore();
+  },
+};
+
+function getOrCreateElevTooltipEl() {
+  let el = document.getElementById('elev-tooltip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'elev-tooltip';
+    el.className = 'elev-tooltip';
+    el.setAttribute('role', 'tooltip');
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function externalElevTooltip(context) {
+  const { chart, tooltip } = context;
+  const el = getOrCreateElevTooltipEl();
+  if (tooltip.opacity === 0) {
+    el.style.opacity = '0';
+    el.style.visibility = 'hidden';
+    return;
+  }
+  el.style.opacity = '1';
+  el.style.visibility = 'visible';
+  const canvas = chart.canvas;
+  const rect = canvas.getBoundingClientRect();
+  const left = rect.left + tooltip.caretX;
+  const top = rect.top + tooltip.caretY;
+  el.style.position = 'fixed';
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+  let transform = 'translate(-50%, calc(-100% - 14px))';
+  if (top < 72) transform = 'translate(-50%, 14px)';
+  el.style.transform = transform;
+  el.style.pointerEvents = 'none';
+  el.style.zIndex = '10050';
+  const titleLines = tooltip.title || [];
+  const bodyLines = (tooltip.body || []).flatMap(b => b.lines || []);
+  const lines = [...titleLines, ...bodyLines].filter(Boolean);
+  el.innerHTML = lines.map(l => `<div>${String(l)}</div>`).join('') || '';
+}
+
+function renderElevation(t) {
+  const myGen = ++elevRenderGen;
+  const prof = t.elevation_profile || [];
+  const canvas = document.getElementById('elevation-chart');
+  const noEl = document.getElementById('elevation-unavailable');
+  if (elevChart) { elevChart.destroy(); elevChart = null; }
+  clearElevProfileMapMarker();
+
+  if (!prof.length) {
+    if (canvas) canvas.style.display = 'none';
+    if (noEl) { noEl.style.display = 'block'; }
+    const tip = document.getElementById('elev-tooltip');
+    if (tip) { tip.style.opacity = '0'; tip.style.visibility = 'hidden'; }
+    return;
+  }
+  if (canvas) canvas.style.display = 'block';
+  if (noEl) noEl.style.display = 'none';
+
+  if (!canvas) return;
+
+  /* Dopo innerHTML il pannello è appena visibile: Chart.js misura il canvas a 0×0 se disegniamo nello stesso tick. */
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (myGen !== elevRenderGen) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      if (elevChart) {
+        try { elevChart.destroy(); } catch (e) {}
+        elevChart = null;
+      }
+
+      const grid = 'rgba(125, 155, 122, 0.14)';
+      const tick = '#9a8a78';
+
+      elevChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [{
+            data: prof.map(p => ({ x: p.d, y: p.e })),
+            fill: true,
+            borderColor: ELEV_LINE,
+            backgroundColor: ELEV_FILL,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: ELEV_LINE,
+            pointHoverBorderColor: '#f5efe6',
+            pointHoverBorderWidth: 1,
+            tension: 0.3,
+          }]
+        },
+        plugins: [elevXAxisHoverPlugin, elevCrosshairPlugin],
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          parsing: false,
+          interaction: {
+            mode: 'nearest',
+            intersect: false,
+            axis: 'x',
+          },
+          hover: {
+            mode: 'nearest',
+            intersect: false,
+            axis: 'x',
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              enabled: false,
+              external: externalElevTooltip,
+              displayColors: false,
+              padding: 10,
+              callbacks: {
+                title: () => '',
+                label: c => `${c.parsed.y} m · km ${c.parsed.x.toFixed(1)}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              type: 'linear',
+              title: { display: true, text: 'km', color: tick, font: { size: 11 } },
+              ticks: { color: tick, maxTicksLimit: 8, font: { size: 11 } },
+              grid: { color: grid },
+            },
+            y: {
+              title: { display: true, text: 'm', color: tick, font: { size: 11 } },
+              ticks: { color: tick, font: { size: 11 } },
+              grid: { color: grid },
+            },
+          },
+        },
+      });
+      elevChart.$elevTrack = t;
+      elevChart.$elevProfile = prof;
+      if (elevChart && typeof elevChart.resize === 'function') elevChart.resize();
+    });
+  });
+}
+
+function closeDetail() {
+  elevRenderGen++;
+  S.sel = null;
+  if (elevChart) { elevChart.destroy(); elevChart = null; }
+  clearElevProfileMapMarker();
+  const tip = document.getElementById('elev-tooltip');
+  if (tip) { tip.style.opacity = '0'; tip.style.visibility = 'hidden'; }
+  document.querySelectorAll('.track-item').forEach(el => el.classList.remove('active'));
+  if (map) restoreMapFullLayers();
+  renderDetailPlaceholder();
+  if (map) setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 80);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  STATS VIEW
+// ═══════════════════════════════════════════════════════════════════
+
+let statsChartsRendered = false;
+
+function renderStats() {
+  const s = S.gstats;
+  const byYear = {};
+  S.tracks.forEach(t => {
+    if (!t.year) return;
+    if (!byYear[t.year]) byYear[t.year] = { n: 0, km: 0, ele: 0 };
+    byYear[t.year].n++;
+    byYear[t.year].km  += t.distance_km;
+    byYear[t.year].ele += t.ele_gain_m;
+  });
+  const years = Object.keys(byYear).sort();
+  const byMonth = Array(12).fill(0);
+  S.tracks.forEach(t => { if (t.date) byMonth[+t.date.slice(5,7)-1]++; });
+
+  const top5km  = [...S.tracks].sort((a,b) => b.distance_km - a.distance_km).slice(0,5);
+  const top5ele = [...S.tracks].sort((a,b) => b.ele_gain_m  - a.ele_gain_m).slice(0,5);
+
+  document.getElementById('stats-content').innerHTML = `
+    <h1>Statistiche</h1>
+    <p class="subtitle">Un'intera vita di cammino, in numeri.</p>
+    <div class="hero-grid">
+      <div class="hero-cell"><span class="hero-val">${fmt(s.total_km)}</span><div class="hero-lbl">km percorsi</div></div>
+      <div class="hero-cell"><span class="hero-val">${fmt(s.total_ele_gain)}</span><div class="hero-lbl">m dislivello totale</div></div>
+      <div class="hero-cell"><span class="hero-val">${s.total_tracks}</span><div class="hero-lbl">uscite</div></div>
+      <div class="hero-cell"><span class="hero-val">${fmt(s.ele_record)}</span><div class="hero-lbl">m quota record</div></div>
+      <div class="hero-cell"><span class="hero-val">${fmt(s.total_photos)}</span><div class="hero-lbl">foto</div></div>
+      <div class="hero-cell"><span class="hero-val">${(s.years||[]).length}</span><div class="hero-lbl">anni di avventure</div></div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-cell">
+        <h3>Uscite per anno</h3>
+        <canvas id="ch-year"></canvas>
+      </div>
+      <div class="chart-cell">
+        <h3>Distribuzione mensile</h3>
+        <canvas id="ch-month"></canvas>
+      </div>
+      <div class="chart-cell">
+        <h3>Top 5 — distanza</h3>
+        <div class="top-list">
+          ${top5km.map((t,i) => `
+            <div class="top-row" onclick="switchToMap('${t.id}')">
+              <span class="top-rank">${i+1}</span>
+              <span class="top-name">${escapeHtml(trackDisplayName(t))}</span>
+              <span class="top-val">${t.distance_km} km</span>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="chart-cell">
+        <h3>Top 5 — dislivello</h3>
+        <div class="top-list">
+          ${top5ele.map((t,i) => `
+            <div class="top-row" onclick="switchToMap('${t.id}')">
+              <span class="top-rank">${i+1}</span>
+              <span class="top-name">${escapeHtml(trackDisplayName(t))}</span>
+              <span class="top-val">+${fmt(t.ele_gain_m)} m</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+
+  setTimeout(() => {
+    const MONTHS = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+    new Chart(document.getElementById('ch-year'), {
+      type: 'bar',
+      data: { labels: years, datasets: [{
+        label: 'Uscite', data: years.map(y => byYear[y].n),
+        backgroundColor: years.map(y => (YEAR_COLOR[y]||'#7d9b7a') + 'bb'),
+        borderColor:     years.map(y =>  YEAR_COLOR[y]||'#7d9b7a'),
+        borderWidth: 1,
+      }]},
+      options: { plugins:{ legend:{display:false} }, scales: {
+        x:{ ticks:{color:'#9a8a78',font:{size:11}}, grid:{color:'#453830'} },
+        y:{ ticks:{color:'#9a8a78',font:{size:11}}, grid:{color:'#453830'} }
+      }}
+    });
+    new Chart(document.getElementById('ch-month'), {
+      type: 'bar',
+      data: { labels: MONTHS, datasets: [{
+        label: 'Uscite', data: byMonth,
+        backgroundColor: '#7d9b7a55', borderColor: '#7d9b7a', borderWidth: 1,
+      }]},
+      options: { plugins:{ legend:{display:false} }, scales: {
+        x:{ ticks:{color:'#9a8a78',font:{size:11}}, grid:{color:'#453830'} },
+        y:{ ticks:{color:'#9a8a78',font:{size:11}}, grid:{color:'#453830'} }
+      }}
+    });
+  }, 80);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  TIMELINE VIEW
+// ═══════════════════════════════════════════════════════════════════
+
+function renderTimeline() {
+  const byYear = {};
+  [...S.tracks].sort((a,b) => (b.date||'').localeCompare(a.date||''))
+    .forEach(t => {
+      const y = t.year || '—';
+      if (!byYear[y]) byYear[y] = [];
+      byYear[y].push(t);
+    });
+  const years = Object.keys(byYear).sort((a,b) => b-a);
+
+  document.getElementById('timeline-content').innerHTML = `
+    <h1>Cronologia</h1>
+    <p class="subtitle">Ogni uscita, dal più recente al più lontano.</p>
+    ${years.map(year => {
+      const tracks = byYear[year];
+      const totalKm  = tracks.reduce((s,t) => s+t.distance_km, 0).toFixed(1);
+      const totalEle = tracks.reduce((s,t) => s+t.ele_gain_m,  0);
+      const col = YEAR_COLOR[year] || '#7d9b7a';
+      return `
+        <div class="year-block">
+          <div class="year-label" style="border-color:${col};color:${col}">${year}</div>
+          <div class="year-summary">${tracks.length} uscite · ${totalKm} km · +${fmt(totalEle)} m dislivello</div>
+          <div class="year-cards">
+            ${tracks.map(t => {
+              const ph = S.photos.find(p => p.track_id === t.id && p.thumb);
+              return `
+                <div class="trek-card" onclick="switchToMap('${t.id}')">
+                  <div class="trek-card-photo${ph ? '' : ' no-img'}"
+                       ${ph ? `style="background-image:url('${ph.thumb}')"` : ''}>
+                    ${ph ? '' : '🏔'}
+                  </div>
+                  <div class="trek-card-body">
+                    <div class="trek-card-date">${fmtDate(t.date)}</div>
+                    <div class="trek-card-name">${escapeHtml(trackDisplayName(t))}</div>
+                    <div class="trek-card-pills">
+                      <span class="pill">${t.distance_km} km</span>
+                      <span class="pill">+${t.ele_gain_m}m</span>
+                      <span class="pill">▲${t.ele_max_m}m</span>
+                    </div>
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }).join('')}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  LIGHTBOX
+// ═══════════════════════════════════════════════════════════════════
+
+function photosForTrack(t) {
+  if (!t) return [];
+  return S.photos.filter((p) => {
+    if (String(p.track_id) === String(t.id)) return true;
+    if (t.folder_label && p.folder === t.folder_label) return true;
+    return false;
+  });
+}
+
+function openLb(idx, trackId) {
+  const t = S.tracks.find((x) => x.id === trackId);
+  S.lb = { photos: photosForTrack(t || { id: trackId }), idx };
+  showLbPhoto();
+}
+
+function openLbFromPhoto(photo) {
+  const pool = photo.track_id
+    ? S.photos.filter(p => p.track_id === photo.track_id)
+    : [photo];
+  const idx = pool.findIndex(p => p.id === photo.id);
+  S.lb = { photos: pool, idx: idx >= 0 ? idx : 0 };
+  showLbPhoto();
+}
+
+function showLbPhoto() {
+  const { photos, idx } = S.lb;
+  if (!photos.length) return;
+  const p = photos[idx];
+  document.getElementById('lb-img').src = p.src;
+  document.getElementById('lb-caption').textContent =
+    `${p.folder}  ·  ${idx+1}/${photos.length}${p.datetime ? '  ·  ' + p.datetime.replace('T',' ') : ''}`;
+  document.getElementById('lightbox').classList.remove('hidden');
+  const multi = photos.length > 1;
+  document.getElementById('lb-prev').style.display = multi ? '' : 'none';
+  document.getElementById('lb-next').style.display = multi ? '' : 'none';
+}
+
+function lbMove(dir) {
+  const { photos, idx } = S.lb;
+  S.lb.idx = (idx + dir + photos.length) % photos.length;
+  showLbPhoto();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════════════════
+
+function setView(v) {
+  S.view = v;
+  document.querySelectorAll('.view').forEach(el => el.classList.add('hidden'));
+  document.getElementById(`view-${v}`).classList.remove('hidden');
+  document.querySelectorAll('[data-view]').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === v)
+  );
+  if (v === 'map') setTimeout(() => map.invalidateSize(), 120);
+}
+
+function switchToMap(trackId) {
+  setView('map');
+  setTimeout(() => selectTrack(trackId), 150);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════════
+
+function fmtDate(s) {
+  if (!s) return '—';
+  const [y,m,d] = s.split('-');
+  const mn = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+  return `${+d} ${mn[+m-1]} ${y}`;
+}
+
+/** Nome elenco/dettaglio: da cartella (folder_label) anche per dati salvati prima della rinomina. */
+function trackDisplayName(t) {
+  if (!t) return '';
+  try {
+    if (window.TrekScan && typeof TrekScan.computeDisplayNameFromFolderLabel === 'function' && t.folder_label) {
+      const d = TrekScan.computeDisplayNameFromFolderLabel(t.folder_label);
+      if (d) return d;
+    }
+  } catch (e) {}
+  return stripLegacyTrekTitle(t.name) || String(t.name || '');
+}
+
+/** Vecchi salvataggi: nome = "YYYY-MM-DD HH:mm …" dal GPX — togli prefisso se resta solo il resto. */
+function stripLegacyTrekTitle(name) {
+  const s = String(name || '').trim();
+  if (!s) return '';
+  let m = s.match(/^\d{4}-\d{2}-\d{2}[T\s]\d{1,2}:\d{2}(?::\d{2})?\s+/);
+  if (m) return s.slice(m[0].length).trim();
+  m = s.match(/^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}\s+/);
+  if (m) return s.slice(m[0].length).trim();
+  return s;
+}
+function fmt(n) { return (n||0).toLocaleString('it'); }
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Come i nomi cartella in app: toglie prefisso "n) " iniziale per la vista ad albero */
+function stripFolderStem(name) {
+  return String(name || '').replace(/^\d+\)\s*/i, '').trim() || String(name || '');
+}
+
+const FOLDER_ICON_SVG = '<svg viewBox="0 0 24 20" aria-hidden="true"><path fill="currentColor" d="M2 4.5C2 3.12 3.12 2 4.5 2h4.2c.42 0 .83.17 1.13.47L11.2 5h8.3C20.88 5 22 6.12 22 7.5v9c0 1.38-1.12 2.5-2.5 2.5h-15A2.5 2.5 0 0 1 2 16.5v-12z"/></svg>';
+
+function folderPathKey(parts) {
+  return JSON.stringify(parts);
+}
+
+/** Albero: segmenti path (da folder_label) → cartelle annidate; tracce solo sulle foglie. */
+function buildFolderTree(tracks) {
+  const root = { folders: {}, treks: [] };
+  for (const t of tracks) {
+    const label = (t.folder_label || '').trim() || t.name;
+    const parts = label.split(/\s*\/\s*/).map((s) => s.trim()).filter(Boolean);
+    if (!parts.length) parts.push(t.name);
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const seg = parts[i];
+      if (!node.folders[seg]) node.folders[seg] = { folders: {}, treks: [] };
+      node = node.folders[seg];
+    }
+    node.treks.push(t);
+  }
+  return root;
+}
+
+/**
+ * Salta al massimo **un** livello se c’è una sola cartella senza uscite qui.
+ * L’unwrap ricorsivo rimuoveva tutti i livelli e la vista «Cartelle» sembrava «Tutte».
+ */
+function unwrapSingletonFolders(node, pathPrefix) {
+  const p = pathPrefix ? pathPrefix.slice() : [];
+  let n = node;
+  if (!n) return { node: n, pathPrefix: p };
+  if (
+    Object.keys(n.folders || {}).length === 1 &&
+    (!n.treks || n.treks.length === 0)
+  ) {
+    const k = Object.keys(n.folders)[0];
+    p.push(k);
+    n = n.folders[k];
+  }
+  return { node: n, pathPrefix: p };
+}
+
+function collectAllFolderPathKeys(node, prefix, out) {
+  if (!node || !node.folders) return;
+  for (const k of Object.keys(node.folders)) {
+    const path = [...prefix, k];
+    out.push(folderPathKey(path));
+    collectAllFolderPathKeys(node.folders[k], path, out);
+  }
+}
+
+function renderTrackItemHTML(t) {
+  const col = YEAR_COLOR[t.year] || '#7d9b7a';
+  const phs = S.photos.filter(p => p.track_id === t.id).length;
+  return `<div class="track-item${S.sel?.id === t.id ? ' active' : ''}" data-id="${t.id}" onclick="selectTrack('${t.id}')" onmouseenter="onSidebarTrackHover('${t.id}')" onmouseleave="onSidebarTrackHoverEnd('${t.id}')">
+      <div class="track-bar" style="background:${col}"></div>
+      <div class="track-body">
+        <div class="track-name">${escapeHtml(trackDisplayName(t))}</div>
+        <div class="track-date">${fmtDate(t.date)}${t.time_hm ? ' · ' + escapeHtml(t.time_hm) : ''}</div>
+        <div class="track-pills">
+          <span class="pill">${t.distance_km} km</span>
+          <span class="pill">+${t.ele_gain_m}m</span>
+          <span class="pill">▲${t.ele_max_m}m</span>
+          ${phs ? `<span class="pill">📷 ${phs}</span>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderFolderTreeHTML(node, pathPrefix) {
+  const folderKeys = Object.keys(node.folders || {}).sort((a, b) => a.localeCompare(b, 'it'));
+  const treks = [...(node.treks || [])].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  let html = '';
+  for (const fk of folderKeys) {
+    const child = node.folders[fk];
+    const newPath = [...pathPrefix, fk];
+    const key = folderPathKey(newPath);
+    const expanded = S.folderTreeExpanded.has(key);
+    const disp = stripFolderStem(fk);
+    const inner = renderFolderTreeHTML(child, newPath);
+    html += `<div class="folder-block">
+      <button type="button" class="folder-row${expanded ? ' expanded' : ''}" data-folder-path="${encodeURIComponent(key)}" aria-expanded="${expanded}" onclick="toggleFolderTree(event,this)">
+        <span class="folder-chevron" aria-hidden="true">▸</span>
+        <span class="folder-icon-wrap">${FOLDER_ICON_SVG}</span>
+        <span class="folder-name">${escapeHtml(disp)}</span>
+      </button>
+      <div class="folder-children" style="display:${expanded ? 'block' : 'none'}">${inner}</div>
+    </div>`;
+  }
+  for (const t of treks) {
+    html += renderTrackItemHTML(t);
+  }
+  return html;
+}
+
+function toggleFolderTree(ev, btn) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  const key = decodeURIComponent(btn.dataset.folderPath || '[]');
+  if (S.folderTreeExpanded.has(key)) S.folderTreeExpanded.delete(key);
+  else S.folderTreeExpanded.add(key);
+  /* Senza preserveFolderExpansion si reimposta l’espansione di tutte le cartelle → il clic sembra non fare nulla. */
+  renderTrackList({ preserveFolderExpansion: true });
+}
+
+function setSidebarListMode(mode) {
+  if (mode !== 'flat' && mode !== 'folders') return;
+  S.sidebarListMode = mode;
+  const bFlat = document.getElementById('sidebar-mode-flat');
+  const bFold = document.getElementById('sidebar-mode-folders');
+  if (bFlat) bFlat.classList.toggle('active', mode === 'flat');
+  if (bFold) bFold.classList.toggle('active', mode === 'folders');
+  if (mode === 'folders') {
+    const list = S.tracks.filter(t =>
+      (!S.filter.year || t.year == S.filter.year) &&
+      (!S.filter.q || trackDisplayName(t).toLowerCase().includes(S.filter.q.toLowerCase()) || (t.date || '').includes(S.filter.q))
+    );
+    const tree = buildFolderTree(list);
+    const { node: displayRoot, pathPrefix: rootPrefix } = unwrapSingletonFolders(tree, []);
+    const keys = [];
+    collectAllFolderPathKeys(displayRoot, rootPrefix, keys);
+    S.folderTreeExpanded = new Set(keys);
+  }
+  renderTrackList({ preserveFolderExpansion: true });
+}
+
+let persistTimer = null;
+function schedulePersist() {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    if (!window.MountainBookPersist || (!S.tracks.length && !S.photos.length)) return;
+    MountainBookPersist.saveFromState(S).catch((e) => console.warn('Salvataggio locale:', e));
+  }, 500);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  INIT / RELOAD
+// ═══════════════════════════════════════════════════════════════════
+
+function revokeBlobUrls() {
+  (S.blobUrls || []).forEach(u => { try { URL.revokeObjectURL(u); } catch (e) {} });
+  S.blobUrls = [];
+}
+
+function teardownMap() {
+  closeDetail();
+  if (elevChart) { elevChart.destroy(); elevChart = null; }
+  if (photoGroup && map) {
+    try { map.removeLayer(photoGroup); } catch (e) {}
+  }
+  photoGroup = null;
+  trackLayers = {};
+  if (map) {
+    try { map.remove(); } catch (e) {}
+    map = null;
+  }
+}
+
+function dedupeTracksById(tracks) {
+  const seen = new Set();
+  const out = [];
+  for (const t of tracks || []) {
+    if (!t || t.id == null || t.id === '') continue;
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    out.push(t);
+  }
+  return out;
+}
+
+function syncGstatsFromTracks(gs, tracks, photos) {
+  const tr = tracks || [];
+  const ph = photos || [];
+  const totalKm = Math.round(tr.reduce((s, t) => s + (t.distance_km || 0), 0) * 10) / 10;
+  const totalEle = Math.round(tr.reduce((s, t) => s + (t.ele_gain_m || 0), 0));
+  const eleRecord = tr.length ? Math.max(...tr.map((t) => t.ele_max_m || 0)) : 0;
+  const years = [...new Set(tr.map((t) => t.year).filter(Boolean))].sort();
+  return {
+    ...(gs || {}),
+    total_tracks: tr.length,
+    total_photos: ph.length,
+    total_km: totalKm,
+    total_ele_gain: totalEle,
+    ele_record: eleRecord,
+    years,
+  };
+}
+
+function applyData(payload, opts) {
+  teardownMap();
+  revokeBlobUrls();
+
+  S.tracks = dedupeTracksById(payload.tracks || []);
+  S.photos = payload.photos || [];
+  S.gstats = syncGstatsFromTracks(payload.stats || {}, S.tracks, S.photos);
+  S.trekFingerprints = payload.trekFingerprints || {};
+  if (payload.blobUrls) S.blobUrls = payload.blobUrls.slice();
+
+  Object.keys(YEAR_COLOR).forEach(k => delete YEAR_COLOR[k]);
+  const years = [...new Set(S.tracks.map(t => t.year).filter(Boolean))].sort();
+  years.forEach((y, i) => { YEAR_COLOR[y] = PALETTE[i % PALETTE.length]; });
+
+  const sel = document.getElementById('year-filter');
+  sel.innerHTML = '<option value="">Tutti gli anni</option>';
+  years.forEach(y => {
+    const o = document.createElement('option');
+    o.value = y;
+    o.textContent = y;
+    sel.appendChild(o);
+  });
+
+  const gs = S.gstats;
+  document.getElementById('ns-km').textContent = fmt(gs.total_km);
+  document.getElementById('ns-ele').textContent = `+${fmt(gs.total_ele_gain)}m`;
+  document.getElementById('ns-n').textContent = gs.total_tracks;
+  document.getElementById('ns-ph').textContent = fmt(gs.total_photos);
+
+  S.filter = { year: '', q: '' };
+  document.getElementById('search').value = '';
+  document.getElementById('year-filter').value = '';
+  S.folderTreeExpanded = new Set();
+
+  initMap();
+  plotTracks();
+  plotPhotos();
+  renderTrackList();
+  renderDetailPlaceholder();
+  renderStats();
+  renderTimeline();
+
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('error').style.display = 'none';
+  document.getElementById('welcome').classList.remove('visible');
+  document.getElementById('nav').style.display = 'flex';
+  setView('map');
+
+  if (!opts || !opts.skipPersist) schedulePersist();
+}
+
+function loadTrekDataScript() {
+  return new Promise((resolve) => {
+    if (typeof TREK_DATA !== 'undefined' && TREK_DATA) return resolve(true);
+    if (document.getElementById('trek-data-js')) {
+      return resolve(typeof TREK_DATA !== 'undefined' && !!TREK_DATA);
+    }
+    const s = document.createElement('script');
+    s.id = 'trek-data-js';
+    s.src = 'data/trek-data.js';
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
+  });
+}
+
+async function tryLoadBuiltInData() {
+  const ok = await loadTrekDataScript();
+  if (!ok || typeof TREK_DATA === 'undefined' || !TREK_DATA) return false;
+  const tr = TREK_DATA.tracks;
+  if (!tr || !tr.length) return false;
+  applyData({ tracks: tr, photos: TREK_DATA.photos || [], stats: TREK_DATA.stats || {} });
+  return true;
+}
+
+function showWelcome() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('error').style.display = 'none';
+  document.getElementById('welcome').classList.add('visible');
+  const retry = document.getElementById('btn-retry-built');
+  if (retry) retry.style.display = location.protocol === 'file:' ? 'none' : 'inline-block';
+}
+
+function updateScanLoadingUI(ev) {
+  const detail = document.getElementById('loading-detail');
+  const bar = document.getElementById('loading-bar');
+  if (!detail) return;
+  let txt = '';
+  let pct = null;
+  if (ev.phase === 'listing') {
+    txt = ev.message || '';
+    pct = ev.total ? 5 : 2;
+  } else if (ev.phase === 'folder') {
+    const tf = ev.trackFiles != null ? ev.trackFiles : ev.gpx;
+    const extra = tf != null || ev.photos != null
+      ? `\n${tf ?? 0} tracce (GPX/KML) · ${ev.photos ?? 0} foto`
+      : '';
+    const skip = ev.unchanged ? '\n→ nessun file modificato, uso dati in cache' : '';
+    txt = `Uscita ${ev.current} di ${ev.total}\n${ev.name}${extra}${skip}`;
+    pct = ev.total ? Math.min(95, ((ev.current - 1) / ev.total) * 100) : 0;
+  } else if (ev.phase === 'photo') {
+    txt = `Uscita ${ev.trekCurrent} di ${ev.trekTotal} · Foto ${ev.photoCurrent} / ${ev.photoTotal}\n${ev.file}`;
+    const t = ev.trekTotal || 1;
+    const f = (ev.trekCurrent - 1 + (ev.photoCurrent / (ev.photoTotal || 1))) / t;
+    pct = Math.min(99, Math.max(0, f * 100));
+  }
+  detail.textContent = txt;
+  if (bar && pct != null) bar.style.width = pct + '%';
+}
+
+function resetScanLoadingUI() {
+  const detail = document.getElementById('loading-detail');
+  const bar = document.getElementById('loading-bar');
+  if (detail) detail.textContent = '';
+  if (bar) bar.style.width = '0%';
+}
+
+async function ensureFolderPermission(handle) {
+  if (!handle || handle.kind !== 'directory') return false;
+  const opts = { mode: 'read' };
+  try {
+    let p = await handle.queryPermission(opts);
+    if (p === 'granted') return true;
+    p = await handle.requestPermission(opts);
+    return p === 'granted';
+  } catch (e) {
+    console.warn(e);
+    return false;
+  }
+}
+
+async function runFolderScan(dirHandle, opts) {
+  resetScanLoadingUI();
+  document.getElementById('loading').style.display = 'flex';
+  const lt = document.getElementById('loading-title');
+  if (lt) lt.textContent = (opts && opts.refresh) ? 'Aggiornamento cartella…' : 'Caricamento…';
+  try {
+    const scanOpts = {};
+    if (opts && opts.incremental && S.tracks && S.tracks.length) {
+      scanOpts.incremental = true;
+      scanOpts.previous = {
+        tracks: S.tracks,
+        photos: S.photos,
+        trekFingerprints: S.trekFingerprints || {},
+      };
+    }
+    const result = await TrekScan.scanBaseFolder(dirHandle, updateScanLoadingUI, scanOpts);
+    const bar = document.getElementById('loading-bar');
+    if (bar) bar.style.width = '100%';
+    applyData(result);
+    if (window.MountainBookPersist && MountainBookPersist.saveFolderHandle) {
+      await MountainBookPersist.saveFolderHandle(dirHandle);
+    }
+  } catch (err) {
+    document.getElementById('loading').style.display = 'none';
+    resetScanLoadingUI();
+    throw err;
+  }
+}
+
+async function pickFolderScan() {
+  const status = document.getElementById('scan-status');
+  if (!window.showDirectoryPicker) {
+    alert('Il browser non supporta la scelta della cartella. Usa Chrome o Edge aggiornato, oppure apri la pagina via un server locale (non file://).');
+    return;
+  }
+  let dirHandle;
+  try {
+    dirHandle = await window.showDirectoryPicker();
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+    console.error(e);
+    return;
+  }
+  document.getElementById('welcome').classList.remove('visible');
+  if (status) status.textContent = '';
+  try {
+    await runFolderScan(dirHandle, {});
+  } catch (err) {
+    console.error(err);
+    if (status) status.textContent = String(err.message || err);
+    document.getElementById('welcome').classList.add('visible');
+    alert('Errore durante la scansione: ' + (err.message || err));
+  }
+}
+
+async function refreshFolderScan() {
+  const status = document.getElementById('scan-status');
+  if (!window.MountainBookPersist || !MountainBookPersist.loadFolderHandle) {
+    await pickFolderScan();
+    return;
+  }
+  const h = await MountainBookPersist.loadFolderHandle();
+  if (!h) {
+    await pickFolderScan();
+    return;
+  }
+  if (!(await ensureFolderPermission(h))) {
+    if (status) status.textContent = 'Permesso cartella negato. Usa «Cartella» di nuovo.';
+    return;
+  }
+  document.getElementById('welcome').classList.remove('visible');
+  if (status) status.textContent = '';
+  try {
+    await runFolderScan(h, { refresh: true, incremental: true });
+  } catch (err) {
+    console.error(err);
+    if (status) status.textContent = String(err.message || err);
+    alert('Errore durante l’aggiornamento: ' + (err.message || err));
+  }
+}
+
+async function clearLocalArchive() {
+  if (!window.MountainBookPersist) return;
+  if (!confirm('Eliminare i dati salvati in questa app? Al prossimo avvio non si ricaricheranno automaticamente (potrai usare «Carica cartella»).')) return;
+  try {
+    await MountainBookPersist.clearAll();
+  } catch (e) {
+    alert('Errore: ' + (e.message || e));
+    return;
+  }
+  teardownMap();
+  revokeBlobUrls();
+  S.tracks = [];
+  S.photos = [];
+  S.gstats = {};
+  S.trekFingerprints = {};
+  S.folderTreeExpanded = new Set();
+  S.sidebarListMode = 'flat';
+  const bFlat = document.getElementById('sidebar-mode-flat');
+  const bFold = document.getElementById('sidebar-mode-folders');
+  if (bFlat) bFlat.classList.add('active');
+  if (bFold) bFold.classList.remove('active');
+  document.getElementById('nav').style.display = 'none';
+  document.getElementById('loading').style.display = 'none';
+  showWelcome();
+}
+
+async function bootstrap() {
+  document.getElementById('loading').style.display = 'flex';
+  const lt = document.getElementById('loading-title');
+  if (lt) lt.textContent = 'Caricamento…';
+
+  let h = null;
+  if (window.MountainBookPersist && MountainBookPersist.loadFolderHandle) {
+    try {
+      h = await MountainBookPersist.loadFolderHandle();
+    } catch (e) {
+      console.warn('folderHandle:', e);
+    }
+  }
+
+  let persisted = null;
+  if (window.MountainBookPersist) {
+    try {
+      persisted = await MountainBookPersist.loadIntoPayload();
+    } catch (e) {
+      console.warn('Dati locali:', e);
+    }
+  }
+
+  if (h && window.TrekScan && (await ensureFolderPermission(h))) {
+    try {
+      if (lt) lt.textContent = 'Aggiornamento cartella…';
+      const scanOpts =
+        persisted && persisted.tracks && persisted.tracks.length
+          ? {
+              incremental: true,
+              previous: {
+                tracks: persisted.tracks,
+                photos: persisted.photos || [],
+                trekFingerprints: persisted.trekFingerprints || {},
+              },
+            }
+          : {};
+      const result = await TrekScan.scanBaseFolder(h, updateScanLoadingUI, scanOpts);
+      applyData(result);
+      await MountainBookPersist.saveFolderHandle(h);
+      return;
+    } catch (e) {
+      console.warn('Refresh avvio:', e);
+    }
+  }
+
+  if (persisted && persisted.tracks && persisted.tracks.length) {
+    applyData(persisted, { skipPersist: true });
+    return;
+  }
+
+  const loaded = await tryLoadBuiltInData();
+  if (loaded) return;
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('error').style.display = 'none';
+  showWelcome();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  EVENTS
+// ═══════════════════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', () => {
+  bootstrap();
+
+  document.getElementById('btn-pick-folder').addEventListener('click', pickFolderScan);
+  document.getElementById('nav-pick-folder').addEventListener('click', pickFolderScan);
+  document.getElementById('nav-refresh-folder').addEventListener('click', refreshFolderScan);
+  document.getElementById('nav-clear-local').addEventListener('click', clearLocalArchive);
+  document.getElementById('btn-retry-built').addEventListener('click', async () => {
+    document.getElementById('welcome').classList.remove('visible');
+    document.getElementById('loading').style.display = 'flex';
+    const ok = await tryLoadBuiltInData();
+    document.getElementById('loading').style.display = 'none';
+    if (!ok) showWelcome();
+  });
+
+  document.querySelectorAll('[data-view]').forEach(b =>
+    b.addEventListener('click', () => setView(b.dataset.view))
+  );
+  document.getElementById('search').addEventListener('input', e => {
+    S.filter.q = e.target.value; renderTrackList();
+  });
+  document.getElementById('year-filter').addEventListener('change', e => {
+    S.filter.year = e.target.value; renderTrackList();
+  });
+  document.getElementById('sidebar-mode-flat').addEventListener('click', () => setSidebarListMode('flat'));
+  document.getElementById('sidebar-mode-folders').addEventListener('click', () => setSidebarListMode('folders'));
+  document.getElementById('show-photos').addEventListener('change', e => {
+    if (!map) return;
+    if (S.sel) {
+      plotPhotosForTrack(S.sel.id);
+    } else if (e.target.checked) {
+      if (photoGroup && !map.hasLayer(photoGroup)) map.addLayer(photoGroup);
+    } else if (photoGroup) {
+      map.removeLayer(photoGroup);
+    }
+  });
+
+  // lightbox
+  document.getElementById('lb-close').addEventListener('click', () =>
+    document.getElementById('lightbox').classList.add('hidden')
+  );
+  document.getElementById('lb-prev').addEventListener('click', () => lbMove(-1));
+  document.getElementById('lb-next').addEventListener('click', () => lbMove(1));
+  document.getElementById('lightbox').addEventListener('click', e => {
+    if (e.target.id === 'lightbox') document.getElementById('lightbox').classList.add('hidden');
+  });
+
+  document.addEventListener('keydown', e => {
+    if (document.getElementById('lightbox').classList.contains('hidden')) return;
+    if (e.key === 'Escape')       document.getElementById('lightbox').classList.add('hidden');
+    if (e.key === 'ArrowLeft')    lbMove(-1);
+    if (e.key === 'ArrowRight')   lbMove(1);
+  });
+});
+</script>
+</body>
+</html>
