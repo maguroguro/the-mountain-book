@@ -6,11 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm start          # Launch Electron app in dev mode
-npm run dist:mac   # Build Mac app (runs icon gen + electron-builder + moves .app to root)
-npm run pack       # Alias for dist:mac
+npm run dist:mac   # Build Mac app locally (icon gen + electron-builder + moves .app to root)
+npm run release    # Build + publish to GitHub Releases (requires GH_TOKEN env var)
 ```
 
 **After every code change** to `index.html`, `main.js`, `scan.js`, `persist.js`, `package.json`, or `assets/`, always run `npm run dist:mac` to rebuild `The Mountain Book.app` in the repo root.
+
+### Releasing an update
+
+1. Bump `version` in `package.json`
+2. `GH_TOKEN=<token> npm run release` — builds a ZIP + `.app`, uploads to a new GitHub Release, and pushes `latest-mac.yml` so running apps can detect the update
+3. Running instances check for updates on startup via `electron-updater`; when a new version is found it downloads in the background and prompts the user to restart (Italian dialog)
 
 ### Python data pipeline (one-time setup)
 ```bash

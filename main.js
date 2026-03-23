@@ -3,11 +3,12 @@
  * così la pagina è un “secure context”: File System Access (Cartella / Aggiorna) funziona.
  * Con file:// l’API non è disponibile e i pulsanti sembrano “morti”.
  */
-const { app, BrowserWindow, nativeImage } = require('electron');
+const { app, BrowserWindow, nativeImage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { URL } = require('url');
+const { autoUpdater } = require('electron-updater');
 
 const STATIC_PORT_START = 48723;
 
@@ -150,6 +151,30 @@ function createWindow() {
   return win;
 }
 
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Aggiornamento pronto',
+      message: 'Una nuova versione di The Mountain Book è stata scaricata.',
+      detail: 'Riavvia l\'app per installare l\'aggiornamento.',
+      buttons: ['Riavvia ora', 'Più tardi'],
+      defaultId: 0,
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall();
+    });
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('Auto-updater error:', err?.message);
+  });
+
+  autoUpdater.checkForUpdates().catch(() => {});
+}
+
 app.whenReady().then(async () => {
   if (process.platform === 'darwin') {
     try {
@@ -162,6 +187,7 @@ app.whenReady().then(async () => {
   }
   const win = createWindow();
   await loadAppInto(win);
+  if (app.isPackaged) setupAutoUpdater();
 });
 
 app.on('will-quit', () => {

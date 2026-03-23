@@ -11,6 +11,8 @@ The Mountain Book.app/
 *.blockmap
 builder-debug.yml
 builder-effective-config.yaml
+latest-mac.yml
+latest-mac-arm64.yml
 
 # Opzionale: sorgenti PNG non usati dall’app (icona = emoji rasterizzata in assets/app-icon-emoji.png)
 build/icon-source.png

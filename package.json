@@ -7,7 +7,8 @@
     "start": "electron .",
     "icon:emoji": "node scripts/generate-emoji-icon.cjs",
     "pack": "node scripts/generate-emoji-icon.cjs && electron-builder --mac && node scripts/move-app-to-root.cjs",
-    "dist:mac": "node scripts/generate-emoji-icon.cjs && electron-builder --mac && node scripts/move-app-to-root.cjs"
+    "dist:mac": "node scripts/generate-emoji-icon.cjs && electron-builder --mac && node scripts/move-app-to-root.cjs",
+    "release": "node scripts/generate-emoji-icon.cjs && electron-builder --mac --publish=always && node scripts/move-app-to-root.cjs"
   },
   "author": "",
   "license": "MIT",
@@ -16,10 +17,18 @@
     "electron": "^28.3.0",
     "electron-builder": "^24.13.3"
   },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
+  },
   "build": {
     "appId": "app.themountainbook.desktop",
     "productName": "The Mountain Book",
     "icon": "assets/app-icon-emoji.png",
+    "publish": {
+      "provider": "github",
+      "owner": "maguroguro",
+      "repo": "the-mountain-book"
+    },
     "files": [
       "main.js",
       "index.html",
@@ -30,7 +39,10 @@
       "build.py"
     ],
     "mac": {
-      "target": ["dir"],
+      "target": [
+        "zip",
+        "dir"
+      ],
       "category": "public.app-category.productivity"
     },
     "directories": {
