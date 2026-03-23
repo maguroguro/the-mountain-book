@@ -10,7 +10,12 @@ const http = require('http');
 const { URL } = require('url');
 const { autoUpdater } = require('electron-updater');
 
-const STATIC_PORT_START = 48723;
+// Single-instance lock: if another instance is already running, focus it and quit.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
+
+const STATIC_PORT = 48723; // Fixed — never increments. IndexedDB origin is http://127.0.0.1:48723
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -66,20 +71,12 @@ function createStaticHandler(root) {
   };
 }
 
-function startStaticServer(root, startPort) {
+function startStaticServer(root) {
   return new Promise((resolve, reject) => {
     const handler = createStaticHandler(root);
-    function attempt(port) {
-      const server = http.createServer(handler);
-      server.on('error', (err) => {
-        if (err.code === 'EADDRINUSE') attempt(port + 1);
-        else reject(err);
-      });
-      server.listen(port, '127.0.0.1', () => {
-        resolve({ server, port });
-      });
-    }
-    attempt(startPort);
+    const server = http.createServer(handler);
+    server.on('error', reject); // EADDRINUSE → fail hard (single-instance lock prevents this)
+    server.listen(STATIC_PORT, '127.0.0.1', () => resolve({ server, port: STATIC_PORT }));
   });
 }
 
@@ -91,7 +88,7 @@ async function ensureStaticServer() {
   if (staticPort != null) return staticPort;
   if (useFileFallback) return null;
   try {
-    const { server, port } = await startStaticServer(__dirname, STATIC_PORT_START);
+    const { server, port } = await startStaticServer(__dirname);
     staticServer = server;
     staticPort = port;
     return port;
@@ -174,6 +171,11 @@ function setupAutoUpdater() {
 
   autoUpdater.checkForUpdates().catch(() => {});
 }
+
+app.on('second-instance', () => {
+  const [win] = BrowserWindow.getAllWindows();
+  if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
+});
 
 app.whenReady().then(async () => {
   if (process.platform === 'darwin') {
