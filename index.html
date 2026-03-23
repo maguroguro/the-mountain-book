@@ -949,7 +949,7 @@ function photoDivIconFromThumb(thumb) {
 
 function addPhotosToCluster(group, photos) {
   photos.forEach(p => {
-    const icon = photoDivIconFromThumb(p.thumb);
+    const icon = photoDivIconFromThumb(p.pin || p.thumb);
     const m = L.marker([p.lat, p.lon], { icon });
     m.on('click', () => openLbFromPhoto(p));
     group.addLayer(m);
@@ -988,21 +988,32 @@ function plotPhotosForTrack(trackId) {
   const pool = photosForTrack(t).filter((p) =>
     p.lat != null && p.lon != null && Number.isFinite(+p.lat) && Number.isFinite(+p.lon)
   );
-  photoGroup = L.layerGroup();
-  pool.forEach((p) => {
-    const icon = photoDivIconFromThumb(p.thumb);
-    const m = L.marker([+p.lat, +p.lon], {
-      icon,
-      pane: 'photoMarkersTop',
-      zIndexOffset: 500,
-    });
-    m.on('click', () => openLbFromPhoto(p));
-    photoGroup.addLayer(m);
-  });
-  photoGroup.addTo(map);
-  ensurePhotosOnTop();
-  const showPh = document.getElementById('show-photos')?.checked !== false;
-  if (!showPh) map.removeLayer(photoGroup);
+  const group = L.layerGroup();
+  photoGroup = group;
+  group.addTo(map);
+  const showPh = document.getElementById(‘show-photos’)?.checked !== false;
+  if (!showPh) { map.removeLayer(group); return; }
+
+  const CHUNK = 20;
+  let i = 0;
+  function addChunk() {
+    if (photoGroup !== group) return; // track changed while we were chunking
+    const end = Math.min(i + CHUNK, pool.length);
+    for (; i < end; i++) {
+      const p = pool[i];
+      const icon = photoDivIconFromThumb(p.pin || p.thumb);
+      const m = L.marker([+p.lat, +p.lon], {
+        icon,
+        pane: ‘photoMarkersTop’,
+        zIndexOffset: 500,
+      });
+      m.on(‘click’, () => openLbFromPhoto(p));
+      group.addLayer(m);
+    }
+    if (i < pool.length) requestAnimationFrame(addChunk);
+    else ensurePhotosOnTop();
+  }
+  requestAnimationFrame(addChunk);
 }
 
 /** Con dettaglio aperto: solo traccia selezionata + sue foto. */
@@ -2158,32 +2169,41 @@ async function bootstrap() {
     }
   }
 
+  // Show cached data immediately so the app is never stuck on "Caricamento…".
+  // If a folder handle is available, attempt a background rescan afterwards.
+  if (persisted && persisted.tracks && persisted.tracks.length) {
+    applyData(persisted, { skipPersist: true });
+    if (h && window.TrekScan) {
+      ensureFolderPermission(h).then((ok) => {
+        if (!ok) return;
+        const scanOpts = {
+          incremental: true,
+          previous: {
+            tracks: persisted.tracks,
+            photos: persisted.photos || [],
+            trekFingerprints: persisted.trekFingerprints || {},
+          },
+        };
+        return TrekScan.scanBaseFolder(h, null, scanOpts).then((result) => {
+          applyData(result);
+          return MountainBookPersist.saveFolderHandle(h);
+        });
+      }).catch((e) => console.warn('Background rescan:', e));
+    }
+    return;
+  }
+
+  // No cached data — try a full scan if a folder handle is available.
   if (h && window.TrekScan && (await ensureFolderPermission(h))) {
     try {
-      if (lt) lt.textContent = 'Aggiornamento cartella…';
-      const scanOpts =
-        persisted && persisted.tracks && persisted.tracks.length
-          ? {
-              incremental: true,
-              previous: {
-                tracks: persisted.tracks,
-                photos: persisted.photos || [],
-                trekFingerprints: persisted.trekFingerprints || {},
-              },
-            }
-          : {};
-      const result = await TrekScan.scanBaseFolder(h, updateScanLoadingUI, scanOpts);
+      if (lt) lt.textContent = 'Scansione cartella…';
+      const result = await TrekScan.scanBaseFolder(h, updateScanLoadingUI, {});
       applyData(result);
       await MountainBookPersist.saveFolderHandle(h);
       return;
     } catch (e) {
-      console.warn('Refresh avvio:', e);
+      console.warn('Scan avvio:', e);
     }
-  }
-
-  if (persisted && persisted.tracks && persisted.tracks.length) {
-    applyData(persisted, { skipPersist: true });
-    return;
   }
 
   const loaded = await tryLoadBuiltInData();
