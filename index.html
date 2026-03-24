@@ -117,7 +117,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   overflow-x: hidden;
   overflow-y: visible;
 }
-/* Porta scroll: il flex figlio con overflow:auto taglia l’ultima riga in Chromium/Electron; il fill assoluto no. */
+/* Porta scroll: il flex figlio con overflow:auto taglia l'ultima riga in Chromium/Electron; il fill assoluto no. */
 .sidebar-scroll {
   flex: 1 1 0;
   min-height: 0;
@@ -629,7 +629,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 <!-- WELCOME: scelta cartella -->
 <div id="welcome">
   <h2>The Mountain Book</h2>
-  <p>Struttura: <strong>cartella base</strong> → (anno o raccolta, es. «Escursioni 2019 con Nadia») → <strong>cartella per ogni uscita</strong> (es. «73)Pizzo Formico 25-11-2019») → dentro <strong>.gpx</strong> / <strong>.kml</strong> e <strong>.jpg</strong>. Se non c’è il livello anno, ogni sottocartella della base è un’uscita.</p>
+  <p>Struttura: <strong>cartella base</strong> → (anno o raccolta, es. «Escursioni 2019 con Nadia») → <strong>cartella per ogni uscita</strong> (es. «73)Pizzo Formico 25-11-2019») → dentro <strong>.gpx</strong> / <strong>.kml</strong> e <strong>.jpg</strong>. Se non c'è il livello anno, ogni sottocartella della base è un'uscita.</p>
   <p style="font-size:0.85rem;margin-top:0.75rem">Dopo una scansione, i dati sono <strong>salvati in questa app</strong> (sul Mac, nello spazio del browser/Electron) e si ripristinano al prossimo avvio.</p>
   <div>
     <button type="button" class="btn-primary" id="btn-pick-folder">Carica cartella…</button>
@@ -979,7 +979,7 @@ function plotPhotos() {
   if (!showPh) map.removeLayer(photoGroup);
 }
 
-/** Solo foto dell’uscita. LayerGroup (no cluster) + pane sopra la traccia Canvas. */
+/** Solo foto dell'uscita. LayerGroup (no cluster) + pane sopra la traccia Canvas. */
 function plotPhotosForTrack(trackId) {
   removePhotoGroupFromMap();
   ensurePhotoMarkersPane();
@@ -991,7 +991,7 @@ function plotPhotosForTrack(trackId) {
   const group = L.layerGroup();
   photoGroup = group;
   group.addTo(map);
-  const showPh = document.getElementById(‘show-photos’)?.checked !== false;
+  const showPh = document.getElementById('show-photos')?.checked !== false;
   if (!showPh) { map.removeLayer(group); return; }
 
   const CHUNK = 20;
@@ -1004,10 +1004,10 @@ function plotPhotosForTrack(trackId) {
       const icon = photoDivIconFromThumb(p.pin || p.thumb);
       const m = L.marker([+p.lat, +p.lon], {
         icon,
-        pane: ‘photoMarkersTop’,
+        pane: 'photoMarkersTop',
         zIndexOffset: 500,
       });
-      m.on(‘click’, () => openLbFromPhoto(p));
+      m.on('click', () => openLbFromPhoto(p));
       group.addLayer(m);
     }
     if (i < pool.length) requestAnimationFrame(addChunk);
@@ -1169,7 +1169,7 @@ function renderDetailPlaceholder() {
   panel.innerHTML = `
     <div class="detail-placeholder">
       <p class="detail-placeholder-title">Dettaglio uscita</p>
-      <p class="detail-placeholder-text">Clicca un’uscita nell’elenco a sinistra o sulla traccia in mappa: statistiche e profilo sotto la mappa, foto qui a destra.</p>
+      <p class="detail-placeholder-text">Clicca un'uscita nell'elenco a sinistra o sulla traccia in mappa: statistiche e profilo sotto la mappa, foto qui a destra.</p>
     </div>`;
   panel.classList.remove('hidden');
 }
@@ -1223,7 +1223,7 @@ function renderDetailPanel(t) {
 }
 
 /**
- * Hover su tutta l’area del grafico: sceglie il punto più vicino lungo l’asse X (non solo sulla linea).
+ * Hover su tutta l'area del grafico: sceglie il punto più vicino lungo l'asse X (non solo sulla linea).
  * Eseguito in rAF dopo gli handler interni di Chart.js così non viene sovrascritto.
  */
 const elevXAxisHoverPlugin = {
@@ -1743,8 +1743,8 @@ function buildFolderTree(tracks) {
 }
 
 /**
- * Salta al massimo **un** livello se c’è una sola cartella senza uscite qui.
- * L’unwrap ricorsivo rimuoveva tutti i livelli e la vista «Cartelle» sembrava «Tutte».
+ * Salta al massimo **un** livello se c'è una sola cartella senza uscite qui.
+ * L'unwrap ricorsivo rimuoveva tutti i livelli e la vista «Cartelle» sembrava «Tutte».
  */
 function unwrapSingletonFolders(node, pathPrefix) {
   const p = pathPrefix ? pathPrefix.slice() : [];
@@ -1820,7 +1820,7 @@ function toggleFolderTree(ev, btn) {
   const key = decodeURIComponent(btn.dataset.folderPath || '[]');
   if (S.folderTreeExpanded.has(key)) S.folderTreeExpanded.delete(key);
   else S.folderTreeExpanded.add(key);
-  /* Senza preserveFolderExpansion si reimposta l’espansione di tutte le cartelle → il clic sembra non fare nulla. */
+  /* Senza preserveFolderExpansion si reimposta l'espansione di tutte le cartelle → il clic sembra non fare nulla. */
   renderTrackList({ preserveFolderExpansion: true });
 }
 
@@ -2118,7 +2118,7 @@ async function refreshFolderScan() {
   } catch (err) {
     console.error(err);
     if (status) status.textContent = String(err.message || err);
-    alert('Errore durante l’aggiornamento: ' + (err.message || err));
+    alert('Errore durante l'aggiornamento: ' + (err.message || err));
   }
 }
 
