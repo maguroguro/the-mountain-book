@@ -2118,7 +2118,7 @@ async function refreshFolderScan() {
   } catch (err) {
     console.error(err);
     if (status) status.textContent = String(err.message || err);
-    alert('Errore durante l'aggiornamento: ' + (err.message || err));
+    alert("Errore durante l'aggiornamento: " + (err.message || err));
   }
 }
 
