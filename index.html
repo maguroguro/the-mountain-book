@@ -2222,7 +2222,12 @@ async function bootstrap() {
 // ═══════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', () => {
-  bootstrap();
+  // Safety net: if bootstrap hangs for any reason, show the welcome screen after 8s.
+  const bootstrapTimer = setTimeout(() => {
+    document.getElementById('loading').style.display = 'none';
+    showWelcome();
+  }, 8000);
+  bootstrap().finally(() => clearTimeout(bootstrapTimer));
 
   document.getElementById('btn-pick-folder').addEventListener('click', pickFolderScan);
   document.getElementById('nav-pick-folder').addEventListener('click', pickFolderScan);
