@@ -12,9 +12,12 @@
 
   function openDb() {
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = (fn) => () => { if (!settled) { settled = true; fn(); } };
+      const timer = setTimeout(settle(() => reject(new Error('IndexedDB open timeout'))), 4000);
       const req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onerror = () => reject(req.error);
-      req.onsuccess = () => resolve(req.result);
+      req.onerror = settle(() => { clearTimeout(timer); reject(req.error); });
+      req.onsuccess = settle(() => { clearTimeout(timer); resolve(req.result); });
       req.onupgradeneeded = (e) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains(STORE_META)) db.createObjectStore(STORE_META);
@@ -41,6 +44,15 @@
     });
   }
 
+  function getAllBlobRows(db) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_BLOBS, 'readonly');
+      const r = tx.objectStore(STORE_BLOBS).getAll();
+      r.onsuccess = () => resolve(r.result || []);
+      r.onerror = () => reject(r.error);
+    });
+  }
+
   /**
    * @param {object} S — stato app { gstats, tracks, photos }
    */
@@ -49,12 +61,15 @@
     const photoIds = [];
     for (const p of S.photos || []) {
       try {
-        const full = await fetch(p.src).then((r) => r.blob());
         const thumb = await fetch(p.thumb).then((r) => r.blob());
+        let pin = thumb;
+        if (p.pin && p.pin !== p.thumb) {
+          try { pin = await fetch(p.pin).then((r) => r.blob()); } catch (e) {}
+        }
         rows.push({
           id: p.id,
-          full,
           thumb,
+          pin,
           meta: {
             id: p.id,
             folder: p.folder,
@@ -102,7 +117,7 @@
       const clr = blobS.clear();
       clr.onsuccess = () => {
         for (const row of snap.rows) {
-          blobS.put({ full: row.full, thumb: row.thumb, meta: row.meta }, row.id);
+          blobS.put({ thumb: row.thumb, pin: row.pin, meta: row.meta }, row.id);
         }
       };
       clr.onerror = () => reject(clr.error);
@@ -120,11 +135,17 @@
 
     for (const id of photoIds) {
       const row = await getBlobRow(db, id);
-      if (!row || !row.full || !row.thumb) continue;
-      const src = URL.createObjectURL(row.full);
+      if (!row || !row.thumb) continue;
       const thumb = URL.createObjectURL(row.thumb);
+      // full blob no longer stored; fall back to thumb for cached view
+      const src = row.full ? URL.createObjectURL(row.full) : thumb;
       blobUrls.push(src, thumb);
-      photos.push({ ...row.meta, src, thumb });
+      let pin = thumb;
+      if (row.pin) {
+        pin = URL.createObjectURL(row.pin);
+        blobUrls.push(pin);
+      }
+      photos.push({ ...row.meta, src, thumb, pin });
     }
 
     return {

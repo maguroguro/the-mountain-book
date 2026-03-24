@@ -1968,8 +1968,10 @@ function loadTrekDataScript() {
     const s = document.createElement('script');
     s.id = 'trek-data-js';
     s.src = 'data/trek-data.js';
-    s.onload = () => resolve(true);
-    s.onerror = () => resolve(false);
+    const done = (val) => { clearTimeout(timer); resolve(val); };
+    const timer = setTimeout(() => done(false), 4000);
+    s.onload = () => done(true);
+    s.onerror = () => done(false);
     document.head.appendChild(s);
   });
 }
@@ -2154,6 +2156,7 @@ async function bootstrap() {
   let h = null;
   if (window.MountainBookPersist && MountainBookPersist.loadFolderHandle) {
     try {
+      if (lt) lt.textContent = 'Apertura archivio…';
       h = await MountainBookPersist.loadFolderHandle();
     } catch (e) {
       console.warn('folderHandle:', e);
@@ -2163,6 +2166,7 @@ async function bootstrap() {
   let persisted = null;
   if (window.MountainBookPersist) {
     try {
+      if (lt) lt.textContent = 'Lettura dati salvati…';
       persisted = await MountainBookPersist.loadIntoPayload();
     } catch (e) {
       console.warn('Dati locali:', e);
